@@ -1,0 +1,189 @@
+package bd.nmam.collection.business.handler.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.InetSocketAddress;
+import java.util.HashMap;
+import java.util.List;
+
+import bd.nmam.collection.business.pojo.beidian.DeviceCommandPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.UpgradeUtil;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.socket.DatagramPacket;
+
+public class BeidianUDPHeartHandler extends ChannelInboundHandlerAdapter{
+	@Override
+	public void channelActive(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+		this.devVers = ContainerUtil.getDevVers();
+//		super.channelActive(ctx);
+//		System.out.println(ctx.channel().remoteAddress().toString());
+//		ContainerUtil.getTcpClientFuture().put(ctx.channel().remoteAddress().toString().substring(1), ctx.channel());
+		ctx.fireChannelActive();
+	}
+	private final String TYPE_HEARTBEAT = "04";
+	private final String H = "7E";
+	private final String E = "0D";
+	private final String M = "84300D";
+	private String M1 = "00000000";
+	private final String M2 = "7009";
+	private String deviceId;
+	private String deviceType;
+	private String reportPart1;
+	private String reportPart2;
+	private String reportPart3;
+	private String CHKSUM;
+	private HashMap<String,String> devVers;
+	private boolean verFlag;
+	
+	@Override
+	public void channelRead(ChannelHandlerContext ctx, Object msg)
+			throws Exception {
+		// TODO Auto-generated method stub
+//		super.channelRead(ctx, msg);
+		String data = (String)msg;
+		Logger.getLogger("r3").info(data);
+		String[] datas = data.split("####");
+		switch(datas[1].substring(8, 10)){
+		case TYPE_HEARTBEAT:
+			System.out.println("心跳++" + data);
+			
+			ByteBuf deviceResponse = Unpooled.copiedBuffer(operate(datas[1]));
+			String[] addr = datas[0].split(":");
+			DatagramPacket dp = new DatagramPacket(deviceResponse,
+					new InetSocketAddress(addr[0],
+							Integer.parseInt(addr[1])));
+			ctx.writeAndFlush(dp);
+			
+			Logger.getLogger("r3").info(datas[1]);
+			Thread.sleep(1000);
+			//缓存指令下发
+			deviceId = datas[1].substring(16, 32);
+			DeviceCommandPojo dcp = ContainerUtil.getDeviceCommBuf().get(deviceId);
+			if(dcp!=null){
+			dcp.setAddress(addr[0]);
+			dcp.setPort(addr[1]);
+			//==================================================
+			List<String> index = dcp.get_INDEX();
+			List<String> cmd = dcp.get_CMD();
+			for(int i = 0; i < index.size(); i++){
+				String[] _index = index.get(i).split("#");
+				if(_index[2].equals("0") && !_index[3].equals(_index[0])){
+					System.out.println("send 5");
+					byte[] data1 = ContainerUtil.message2Bytes(cmd.get(i));
+					ByteBuf deviceCMD = Unpooled.copiedBuffer(data1);
+					DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+							new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+					ctx.writeAndFlush(dpCMD);
+					index.set(i, _index[0] + "#" + (Integer.parseInt(_index[1]) + 1) + "#" + _index[2] + "#" + _index[3]);
+					break;//设备端接收能力有限，发送一帧缓存指令后，中断发送循环
+				}
+			}
+			//==================================================
+//			if(dcp!=null && dcp.getCMD()!=null && dcp.getIssueFlag()==1){
+//				String CMD = dcp.getCMD();
+//				byte[] cmd = ContainerUtil.message2Bytes(CMD);
+//				ByteBuf deviceCMD = Unpooled.copiedBuffer(cmd);
+//				DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+//					new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+//				ctx.writeAndFlush(dpCMD);
+//			}
+			}
+			break;
+			
+		default:
+			ctx.fireChannelRead(msg);
+			break;
+		}
+	}
+
+	@Override
+	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+//		super.channelReadComplete(ctx);
+		reportPart1 = "";
+		reportPart2 = "";
+		reportPart3 = "";
+		CHKSUM ="";
+		
+	}
+
+	@Override
+	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+			throws Exception {
+		// TODO Auto-generated method stub
+//		super.exceptionCaught(ctx, cause);
+		cause.printStackTrace();
+		StringWriter sw = new StringWriter();
+		cause.printStackTrace(new PrintWriter(sw));
+		ContainerUtil.getLoggerWrite().error(sw.toString());
+	}
+	private byte[] operate(String data){
+		//心跳返回帧组帧错误，20190923修复 by seifer
+		deviceId = data.substring(16, 32);
+		if (ContainerUtil.checkSUM(data)) {
+		deviceType = data.substring(16, 22);
+		if(devVers.containsKey(deviceType)){
+			int d1 = Integer.parseInt(devVers.get(deviceType));
+			int d2 = Integer.parseInt(data.substring(32, 38));
+			if(d2>d1){
+				verFlag = false;
+			}else{
+				verFlag = true;
+			}
+		}
+		if(verFlag && UpgradeUtil.getDeviceIds().contains(deviceId)){
+			M1 = devVers.get(deviceType)+"00";
+		}else{
+			M1 = data.substring(32, 40);
+		}
+		reportPart1 = data.substring(2, 8);
+		reportPart2 = data.substring(14, 16);
+		reportPart3 = data.substring(40, 44);
+		CHKSUM = check(reportPart1 + M + reportPart2 + deviceId + M1 + reportPart3);
+		DevicePojo dp = ContainerUtil.getDevices().get(deviceId);
+		if(dp==null){
+			System.out.println("该"+deviceId+"设备不在档案内，请检查设备基础信息");
+		}else{
+			dp.setRefreshTime(System.currentTimeMillis());
+		}
+			//==============================================
+			StringBuffer sb = new StringBuffer();
+			sb.append(H);
+			sb.append(reportPart1);
+			sb.append(M);
+			sb.append(reportPart2);
+			sb.append(deviceId);
+			sb.append(M1);
+			sb.append(reportPart3);
+			sb.append(CHKSUM);
+			sb.append(E);
+			deviceId = "";
+			Logger.getLogger("r3").info("返回数据：" + sb.toString());
+			return ContainerUtil.message2Bytes(sb.toString());
+		}else{
+			System.out.println(deviceId + "设备心跳指令校验失败");
+			return null;
+		}
+		
+	}
+	
+	private static String check(String tmp){
+		int tmpV = 0;
+		for(int i = 0; i < tmp.length() / 2; i++){
+			tmpV += Integer.parseInt(tmp.substring(i * 2 , (i + 1) * 2), 16);
+		}
+		tmpV = (0xFFFF + ~((tmpV - 2) & 0xFFFF));
+		StringBuffer sb = new StringBuffer();
+		sb.append(Integer.toHexString((tmpV & 0xF000) >> 12));
+		sb.append(Integer.toHexString((tmpV & 0xF00) >> 8));
+		sb.append(Integer.toHexString((tmpV & 0xF0) >> 4));
+		sb.append(Integer.toHexString(tmpV & 0xF));
+		return sb.toString().toUpperCase();
+	}
+}

@@ -1,0 +1,157 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.business.pojo.beidian.SwitchPojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianSwitchOperateThread implements Runnable{
+	private HashMap<String, DevicePojo> devices;
+	private long rate;
+	private SimpleDateFormat sdfTable;
+	private SimpleDateFormat sdfStand;
+	private DataSource dataSource;
+	private String insert1 = "insert into switch_";
+	private String insert2 = "(deviceId, signalName, signalStatus, uploadDateTime) values";
+	private String vBegin = ",('";
+	private String midd1 = "', '";
+	private String OFF = "OFF";
+	private String ON = "ON";
+	private String sqlEnd = "')";
+	private ReentrantLock reentrantLock;
+	public BeidianSwitchOperateThread(long rate){
+		this.devices = ContainerUtil.getDevices();
+		this.rate = rate;
+		this.sdfStand = ContainerUtil.getSdfStand();
+		this.sdfTable = ContainerUtil.getSdfTable();
+		this.dataSource = DatabaseUtil.getDataSource();
+		this.reentrantLock = ContainerUtil.getReentrantLock();
+	}
+	public void run(){
+		while(true){
+			Connection con = null;
+			Statement stat = null;
+			try{
+				Iterator<Map.Entry<String, DevicePojo>> itr = null;
+				synchronized(reentrantLock){
+//					System.out.println("模拟量锁定");
+					itr = devices.entrySet().iterator();
+//				}
+				StringBuffer sql = new StringBuffer();
+				int ixFlag = 0;
+				long currentTime = System.currentTimeMillis();
+				while(itr.hasNext()){
+					DevicePojo dp = itr.next().getValue();
+//					dp.setRefreshTime(currentTime);
+					switch(dp.getSwitchFlag()){
+					case 1:
+//						System.out.println("1模拟量处理");
+						List<SwitchPojo> switch2 = dp.getSwitch2();
+						ixFlag += saveAnalog(dp.getDeviceId(), switch2, sql);
+						switch2.clear();
+						dp.setSwitchFlag(2);
+						break;
+					case 2:
+//						System.out.println("2模拟量处理");
+						List<SwitchPojo> switch1 = dp.getSwitch1();
+						ixFlag += saveAnalog(dp.getDeviceId(), switch1, sql);
+						switch1.clear();
+						dp.setSwitchFlag(1);
+						break;
+					}
+				}
+				if(ixFlag > 0){
+					sql.replace(0, 1, "");
+//					System.out.println(sql.toString());
+					sql.insert(0, insert2);
+					sql.insert(0, ContainerUtil.getSdfTable().format(new Date()));
+					sql.insert(0, insert1);
+					con = dataSource.getConnection();
+					stat = con.createStatement();
+					createTableForSwitch(con);
+					stat.executeUpdate(sql.toString());
+					System.out.println("开关保存完毕....");
+				}
+				
+			}
+				
+				Thread.sleep(rate);
+			}catch(Exception e){
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			}finally{
+				try{
+				if(stat != null){
+					stat.close();
+				}
+				if(con != null){
+					con.close();
+				}
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	private int saveAnalog(String deviceId, List<SwitchPojo> list, StringBuffer sql){
+		try{
+			int ix = 0;
+			for(SwitchPojo sp : list){
+				sql.append(vBegin);
+				sql.append(deviceId);
+				sql.append(midd1);
+				sql.append(sp.getSignalId());
+				sql.append(midd1);
+				if(sp.getSignalStatus() == 0){
+					sql.append(OFF);
+				}else if (sp.getSignalStatus() == 1){
+					sql.append(ON);
+				}else{
+					sql.append(String.valueOf(sp.getSignalStatus()));
+				}
+				sql.append(midd1);
+				sql.append(sdfStand.format(sp.getUploadTime()));
+				sql.append(sqlEnd);
+				ix += 1;
+			}
+			return ix;
+		}catch(Exception e){
+			return 0;
+		}
+	}
+	//创建开关量表
+	public void createTableForSwitch(Connection con) throws SQLException {
+		StringBuffer sb = new StringBuffer();
+		sb.append("create table if not exists switch_");
+		sb.append(sdfTable.format(new Date()));
+		sb.append("(id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',");
+		sb.append("deviceId VARCHAR(30) DEFAULT NULL COMMENT '设备ID[index]',");
+		sb.append("signalName VARCHAR(100) DEFAULT NULL COMMENT '信号名称',");
+		sb.append("signalStatus VARCHAR(50) DEFAULT NULL COMMENT '信号状态',");
+		sb.append("uploadDateTime VARCHAR(30) DEFAULT NULL COMMENT '上报时间',");
+		sb.append("PRIMARY KEY (`id`), KEY index_device (deviceId)) ENGINE=MYISAM DEFAULT CHARSET=utf8");
+//		Connection con = dataSource.getConnection();
+		Statement stat = con.createStatement();
+		// Statement stat = dataSource.getConnection().createStatement();
+		stat.executeUpdate(sb.toString());
+		stat.close();
+//		con.close();
+	}
+}

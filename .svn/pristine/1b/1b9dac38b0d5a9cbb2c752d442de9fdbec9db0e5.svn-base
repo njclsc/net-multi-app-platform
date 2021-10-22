@@ -1,0 +1,284 @@
+package bd.nmam.collection.business.handler.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.zip.CRC32;
+
+import bd.nmam.collection.business.pojo.beidian.UpgradePojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.UpgradeUtil;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.socket.DatagramPacket;
+
+public class BeidianUpgradeHandler extends ChannelInboundHandlerAdapter{
+	private final String TYPE_UPGRADE = "01";
+	@Override
+	public void channelActive(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+//		super.channelActive(ctx);
+	}
+
+	@Override
+	public void channelRead(ChannelHandlerContext ctx, Object msg)
+			throws Exception {
+		// TODO Auto-generated method stub
+//		super.channelRead(ctx, msg);
+		String data = (String) msg;
+		Logger.getLogger("r4").info(data);
+		if(UpgradeUtil.getWayFlag() == 0){
+			String[] datas = data.split("####");
+			switch (datas[1].substring(8, 10)) {
+			case TYPE_UPGRADE:
+				operate(ctx, datas[0], datas[1]);
+				break;
+			default:
+				ctx.fireChannelRead(msg);
+				break;
+			}
+		}else if(UpgradeUtil.getWayFlag() == 1){
+			switch (data.substring(8, 10)) {
+			case TYPE_UPGRADE:
+				operate(ctx, null, data);
+				break;
+			default:
+				ctx.fireChannelRead(msg);
+				break;
+			}
+		}
+	}
+	private void operate(ChannelHandlerContext ctx, String address, String data){
+		System.out.println(address + "升级数据：" + data);
+		String fsuId = data.substring(16, 32);
+		UpgradePojo ups = UpgradeUtil.getUpgradePojos().get(fsuId);
+		if(ups == null){
+			ups = new UpgradePojo();
+			ups.setBinKey(fsuId.substring(0, 6));
+			ups.setDeviceId(fsuId);
+			ups.setUpgradeIndex(0);
+			ups.setUpgradePackageSum(UpgradeUtil.getBinsData().get(ups.getBinKey()).size());
+		}
+		byte cid1 = (byte)Integer.parseInt(data.substring(6, 8), 16);
+		String frameType = data.substring(14, 16);
+		if(frameType.equals("00")){
+			System.out.println(fsuId + "升级握手中....");
+			byte cid2 = (byte)0x81;
+			byte[] lens = new byte[]{0x10, (byte)0x2D};
+			byte type = (byte)0x00;
+			byte[] fsuIds = new byte[8];
+			for(int i = 0; i < fsuId.length() / 2; i++){
+				fsuIds[i] = (byte)Integer.parseInt(fsuId.substring(i * 2, (i + 1) * 2), 16);
+			}
+			int frameSum = UpgradeUtil.getBinsData().get(fsuId.substring(0, 6)).size();
+			byte[] frameSumB = new byte[2];
+			frameSumB[0] = (byte)((frameSum & 0xFF00) >> 8);
+			frameSumB[1] = (byte)(frameSum & 0xFF);
+			byte[] frameLen = new byte[]{(byte)0x02, (byte)0x00};
+			byte[] def = new byte[]{(byte)0xFF, (byte)0x55, (byte)0x50, (byte)0x55, 
+					(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00}; 
+			String version = ContainerUtil.getDevVers().get(fsuId.substring(0, 6)) + "00";
+			byte[] Version = new byte[4];
+			for(int i =0;i<4;i++){
+				Version[i] = Byte.parseByte(version.substring(i * 2, (i * 2) + 2));
+			}
+//					(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, 
+			byte[] startaddr = new byte[]{(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00};
+			long fileLen = UpgradeUtil.getUpgradeFileInfos().get(fsuId.substring(0, 6)).getFileLength();
+			byte[] fl = new byte[]{(byte)((fileLen & 0xFF000000) >> 24), (byte)((fileLen & 0xFF0000) >> 16), 
+					(byte)((fileLen & 0xFF00) >> 8), (byte)(fileLen & 0xFF)};
+//			String version = ContainerUtil.getDevVers().get(fsuId.substring(0, 6)) + "00";
+//			byte[] retain = new byte[8];
+//			for(int i = 0; i < 8; i++){
+//				if(i < 4){
+//					retain[i] = Byte.parseByte(version.substring(i * 2, (i * 2) + 2));
+//				}else{
+//					retain[i] = 0;
+//				}
+//			}
+			//预留字节填充8个0x00
+			byte[] retain = new byte[]{(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, 
+					(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00};
+			List<byte[]> binData = UpgradeUtil.getBinsData().get(fsuId.substring(0, 6));
+			CRC32 c32 = new CRC32();
+			for(int i = 0; i < binData.size(); i++){
+				if(i == binData.size() - 1){
+					c32.update(binData.get(i), 0, (int)(fileLen % 512));
+				}else{
+					c32.update(binData.get(i));
+				}
+			}
+			byte[] crc = new byte[4];
+			long tmpc32 = c32.getValue();
+			crc[0] = (byte)((tmpc32 & 0xFF000000) >> 24);
+			crc[1] = (byte)((tmpc32 & 0xFF0000) >> 16);
+			crc[2] = (byte)((tmpc32 & 0xFF00) >> 8);
+			crc[3] = (byte)(tmpc32 & 0xFF);
+			byte[] seq = new byte[]{(byte)0x00, (byte)0x00};
+			byte[] fnl = new byte[57];
+			fnl[0] = (byte)0x7E;fnl[1] = (byte)0x10;fnl[2] = (byte)0x01;fnl[3] = (byte)cid1;fnl[4] = cid2;fnl[5]=lens[0];fnl[6]=lens[1];fnl[7] = (byte)type;
+			int subTmp = 8;
+			for(int i = 0; i < 8; i++){
+				fnl[subTmp] = fsuIds[i];
+				subTmp += 1;
+				
+			}
+			for(int i = 0; i < 2; i++){
+				fnl[subTmp ] = frameSumB[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 2; i++){
+				fnl[subTmp] = frameLen[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 8; i++){
+				fnl[subTmp] = def[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 4; i++){
+				fnl[subTmp] = Version[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 4; i++){
+				fnl[subTmp] = startaddr[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 4; i++){
+				fnl[subTmp] = fl[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 8; i++){
+				fnl[subTmp] = retain[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 4; i++){
+				fnl[subTmp] = crc[i];
+				subTmp += 1;
+			}
+			for(int i = 0; i < 2; i++){
+				fnl[subTmp] = seq[i];
+				subTmp += 1;
+			}
+			byte[] check = verfiyV(fnl);
+			for(int i = 0; i < 2; i++){
+				fnl[subTmp] = check[i];
+				subTmp += 1;
+			}
+			fnl[subTmp] = 0x0D;
+			if(UpgradeUtil.getWayFlag() == 0){
+				String[] addr = address.split(":");
+				ctx.writeAndFlush(new DatagramPacket(Unpooled.copiedBuffer(fnl)
+						, new InetSocketAddress(addr[0], Integer.parseInt(addr[1]))));
+			}else if(UpgradeUtil.getWayFlag() == 1){
+				ctx.writeAndFlush(Unpooled.copiedBuffer(fnl));
+			}
+			Logger.getLogger("handShake").error("握手成功ID-->" + fsuId);
+			System.out.println("-->");
+		}else if(frameType.equals("01")){
+			String key = fsuId.substring(0, 6);
+			int uindex = Integer.parseInt(data.substring(32, 36), 16);
+			ups.setUpgradeIndex(uindex);
+			System.out.println(fsuId + "升级中 --> 当前第 " + uindex + " 包，共计 " + ups.getUpgradePackageSum() + " 包");
+			byte[] buff = UpgradeUtil.getBinsData().get(key).get(uindex);
+			byte[] fnl = new byte[537];
+			int subTmp = 0;
+			fnl[subTmp] = (byte)0x7E;subTmp += 1;
+			fnl[subTmp] = (byte)0x10;subTmp += 1;
+			fnl[subTmp] = (byte)0x01;subTmp += 1;
+			fnl[subTmp] = cid1;subTmp += 1;
+			fnl[subTmp] = (byte)0x81;subTmp += 1;
+			fnl[subTmp] = (byte)0x12;subTmp += 1;
+			fnl[subTmp] = (byte)0x0D;subTmp += 1;
+			fnl[subTmp] = (byte)0x01;subTmp += 1;
+			for(int i = 0; i < fsuId.length() / 2; i++){
+				fnl[subTmp] = (byte)Integer.parseInt(fsuId.substring(i * 2, (i + 1) * 2), 16);
+				subTmp += 1;
+			}
+			byte index1 = (byte)((uindex & 0xFF00) >> 8);
+			byte index2 = (byte)(uindex & 0xFF);
+			fnl[subTmp] = index1;subTmp += 1;
+			fnl[subTmp] = index2;subTmp += 1;
+			fnl[subTmp] = (byte)0x02;subTmp += 1;
+			fnl[subTmp] = (byte)0x00;subTmp += 1;
+			for(int i = 0; i < buff.length; i++){
+				fnl[subTmp] = buff[i];
+				subTmp += 1;
+			}
+			fnl[subTmp] = 0x00;subTmp+=1;
+			fnl[subTmp] = 0x00;subTmp+=1;
+			byte[] check = verfiyV(fnl);
+			for(int i = 0; i < 2; i++){
+				fnl[subTmp] = check[i];
+				subTmp += 1;
+			}
+			fnl[subTmp] = 0x0D;
+			if(UpgradeUtil.getWayFlag() == 0){
+				String[] addr = address.split(":");
+				ctx.writeAndFlush(new DatagramPacket(Unpooled.copiedBuffer(fnl)
+						, new InetSocketAddress(addr[0], Integer.parseInt(addr[1]))));
+			}else if(UpgradeUtil.getWayFlag() == 1){
+				ctx.writeAndFlush(Unpooled.copiedBuffer(fnl));
+			}
+		}else if(frameType.equals("02")){
+			String key = fsuId.substring(0, 6);
+			byte[] fnl = new byte[25];
+			int subTmp = 0;
+			fnl[subTmp] = (byte)0x7E;subTmp += 1;
+			fnl[subTmp] = (byte)0x10;subTmp += 1;
+			fnl[subTmp] = (byte)0x01;subTmp += 1;
+			fnl[subTmp] = cid1;subTmp += 1;
+			fnl[subTmp] = (byte)0x81;subTmp += 1;
+			fnl[subTmp] = (byte)0x30;subTmp += 1;
+			fnl[subTmp] = (byte)0x0D;subTmp += 1;
+			fnl[subTmp] = (byte)0x02;subTmp += 1;
+			for(int i = 0; i < fsuId.length() / 2; i++){
+				fnl[subTmp] = (byte)Integer.parseInt(fsuId.substring(i * 2, (i + 1) * 2), 16);
+				subTmp += 1;
+			}
+			int fl = UpgradeUtil.getBinsData().get(key).size();
+			fnl[subTmp] = (byte)((fl & 0xFF00) >> 8);subTmp += 1;
+			fnl[subTmp] = (byte)(fl & 0xFF);subTmp += 1;
+			fnl[subTmp] = (byte)0x02;subTmp += 1;
+			fnl[subTmp] = (byte)0x00;subTmp += 1;
+			fnl[subTmp] = 0x00;subTmp+=1;
+			fnl[subTmp] = 0x00;subTmp+=1;
+			byte[] check = verfiyV(fnl);
+			for(int i = 0; i < 2; i++){
+				fnl[subTmp] = check[i];
+				subTmp += 1;
+			}
+			fnl[subTmp] = 0x0D;
+			if(UpgradeUtil.getWayFlag() == 0){
+				String[] addr = address.split(":");
+				ctx.writeAndFlush(new DatagramPacket(Unpooled.copiedBuffer(fnl)
+						, new InetSocketAddress(addr[0], Integer.parseInt(addr[1]))));
+			}else if(UpgradeUtil.getWayFlag() == 1){
+				ctx.writeAndFlush(Unpooled.copiedBuffer(fnl));
+			}
+			Logger.getLogger("handShake").error("升级成功ID-->" + fsuId);
+		}
+	}
+	private byte[] verfiyV(byte[] data){
+		int count = 0;
+		for(int i = 1; i < data.length - 3; i++){
+			count += ((data[i] & 0xFF) );
+		}
+		count = (0xFFFF - (count & 0xFFFF)) + 1;
+		byte[] check = new byte[2];
+		check[0] = (byte)((count & 0xFF00) >> 8);
+		check[1] = (byte)(count & 0xFF);
+		return check;
+	}
+	@Override
+	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+			throws Exception {
+		// TODO Auto-generated method stub
+//		super.exceptionCaught(ctx, cause);
+		cause.printStackTrace();
+		StringWriter sw = new StringWriter();
+		cause.printStackTrace(new PrintWriter(sw));
+		Logger.getLogger("r4").error(sw.toString());
+	}
+}

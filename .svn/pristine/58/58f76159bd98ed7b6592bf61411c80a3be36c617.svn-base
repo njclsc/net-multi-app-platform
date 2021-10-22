@@ -1,0 +1,213 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.Alarm;
+import bd.nmam.collection.business.pojo.beidian.AlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.business.pojo.beidian.TheTimlyAlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.Upload;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianOfflineOperateThread implements Runnable{
+	private long rate;
+	private long diffFlag;
+	private DataSource ds;
+	private SimpleDateFormat sdfTable;
+	private SimpleDateFormat sdfStandard;
+	private HashMap<String, DevicePojo> devices;
+	private HashMap<String, TheTimlyAlarmPojo> timlyAlarmBuf;
+	private List<Upload> up1;
+	private List<Upload> up2;
+	private ReentrantLock reentrantLock;
+	public BeidianOfflineOperateThread(long rate, long diffFlag){
+		this.rate = rate;
+		this.diffFlag = diffFlag;
+		this.devices = ContainerUtil.getDevices();
+		this.ds = DatabaseUtil.getDataSource();
+		this.sdfStandard = ContainerUtil.getSdfStand();
+		this.sdfTable = ContainerUtil.getSdfTable();
+		this.timlyAlarmBuf = ContainerUtil.getTimlyAlarmBuf();
+		this.up1 = ContainerUtil.getUp1();
+		this.up2 = ContainerUtil.getUp2();
+		this.reentrantLock = ContainerUtil.getReentrantLock();
+	}
+	public void run(){
+		while(true){
+			//Connection con = null;
+			try{
+				Iterator<Map.Entry<String, DevicePojo>> itr = null;
+				synchronized(reentrantLock){
+					itr = devices.entrySet().iterator();
+				
+				
+				//con = ds.getConnection();
+				while(itr.hasNext()){
+					DevicePojo dp = itr.next().getValue();
+					//设备离线signalId
+					//System.out.print(dp.getDeviceId()); 
+					String offlineSignalId = dp.getDeviceId().substring(4, 6)+"030000";
+					String deviceId = dp.getDeviceId();
+					long different = System.currentTimeMillis() - dp.getRefreshTime();
+					if(different >= diffFlag && !dp.getState().equalsIgnoreCase("0")){
+						AlarmPojo ap = new AlarmPojo();
+						ap.setAlarmStatus(1);
+						ap.setSignalId(offlineSignalId);
+						ap.setUploadTime(System.currentTimeMillis());
+						ap.setTypeFlag("custom");
+						switch(dp.getAlarmFlag()){
+						case 1:
+							dp.getAlarms1().add(ap);
+							break;
+						case 2:
+							dp.getAlarms2().add(ap);
+							break;
+						}
+						//由于state会随着告警与告警预置指令的上报进行变化，故新增离线告警状态位来应对离线告警的恢复
+						dp.setOfflineAlarmState("1");
+						ContainerUtil.refreshState(dp);
+						// 存放至实时数据缓存，以便录入实时告警表(离线告警生成)
+						String key = deviceId + "#" + ap.getSignalId();
+						TheTimlyAlarmPojo ttap = timlyAlarmBuf.get(key);
+						if(ttap == null){
+							ttap = new TheTimlyAlarmPojo();
+							ttap.setDeviceId(deviceId);
+							ttap.setSignalId(ap.getSignalId());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+//							ttap.setSwitchStatus(ap.getSwitchStatus());
+							ttap.setUploadTime(ap.getUploadTime());
+							ttap.setChangeFlag(true);
+							ttap.setNewFlag(true);
+							timlyAlarmBuf.put(key, ttap);
+						}else{
+//							ttap.setSwitchStatus(ap.getSwitchStatus());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+							ttap.setChangeFlag(true);
+							ttap.setUploadTime(ap.getUploadTime());
+						}
+						//离线告警生成推送
+						offlineUploadOperate(dp,ap);
+					}else if(different < diffFlag && dp.getOfflineAlarmState().equalsIgnoreCase("1")){
+						AlarmPojo ap = new AlarmPojo();
+						ap.setAlarmStatus(0);
+						ap.setSignalId(offlineSignalId);
+						ap.setUploadTime(System.currentTimeMillis());
+						ap.setTypeFlag("custom");
+						switch(dp.getAlarmFlag()){
+						case 1:
+							dp.getAlarms1().add(ap);
+							break;
+						case 2:
+							dp.getAlarms2().add(ap);
+							break;
+						}
+						dp.setOfflineAlarmState("0");
+						ContainerUtil.refreshState(dp);
+						// 存放至实时数据缓存，以便录入实时告警表(离线告警恢复)
+						String key = deviceId + "#" + ap.getSignalId();
+						TheTimlyAlarmPojo ttap = timlyAlarmBuf.get(key);
+						if(ttap == null){
+							ttap = new TheTimlyAlarmPojo();
+							ttap.setDeviceId(deviceId);
+							ttap.setSignalId(ap.getSignalId());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+//							ttap.setSwitchStatus(ap.getSwitchStatus());
+							ttap.setUploadTime(ap.getUploadTime());
+							ttap.setChangeFlag(true);
+							ttap.setNewFlag(true);
+							timlyAlarmBuf.put(key, ttap);
+						}else{
+//							ttap.setSwitchStatus(ap.getSwitchStatus());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+							ttap.setChangeFlag(true);
+							ttap.setUploadTime(ap.getUploadTime());
+						}
+						//离线告警恢复推送
+						offlineUploadOperate(dp,ap);
+					}
+				}
+//				con = ds.getConnection();
+//				Iterator<Map.Entry<String, DevicePojo>> itr = devices.entrySet().iterator();
+//				long cur = System.currentTimeMillis();
+				
+//				while(itr.hasNext()){
+//					DevicePojo dp = itr.next().getValue();
+//					if(diffFlag >= cur - dp.getRefreshTime()){
+//						AlarmPojo ap = new AlarmPojo();
+//						ap.setAlarmStatus(1);
+//						ap.setSignalId("########");
+//						
+//						Statement stat1 = con.createStatement();
+//						String sql1 = "insert into alarm_" + sdfTable.format(cur) + 
+//								"(deviceId, signalName, alarmStatus, uploadDateTime) values('" + dp.getDeviceId() + "', '" + 
+//								ap.getSignalId() + "', '0', '" + sdfStandard.format(System.currentTimeMillis()) + "')";
+//						stat1.executeUpdate(sql1);
+//						stat1.close();
+//						Statement stat2 = con.createStatement();
+//						String sql2 = "update tb_device set state = '0' where deviceId = '" + dp.getDeviceId() + "'";
+//						stat2.executeUpdate(sql2);
+//						stat2.close();
+//					}else{
+//						Statement stat2 = con.createStatement();
+//						String sql2 = "update tb_device set state = '1' where deviceId = '" + dp.getDeviceId() + "'";
+//						stat2.executeUpdate(sql2);
+//						stat2.close();
+//					}
+//				}
+				}
+				Thread.sleep(rate);
+			}catch(Exception e){
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			}finally{
+				try {
+					//con.close();
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	private void offlineUploadOperate(DevicePojo dp, AlarmPojo ap) {
+		// TODO Auto-generated method stub
+		Upload ul = new Upload();
+		ul.setFrameTime(sdfStandard.format(new Date()));
+		ul.setInfoCount("1#0#0#0");
+		ul.setPlatformID("xxxxxxxx");
+		ul.setDeviceID(dp.getDeviceId());
+		ul.setFrameType("data");
+		String AlarmState = String.valueOf(ap.getAlarmStatus());
+		Alarm[] Alarms = new Alarm[1];
+		Alarm alarm = new Alarm();
+		alarm.setInfoID(ap.getSignalId());
+		alarm.setAlarmState(AlarmState);
+		alarm.setTime(sdfStandard.format(new Date()));
+		Alarms[0] = alarm;
+		
+		ul.setAlarm(Alarms);
+		//加入缓存
+		switch(ContainerUtil.getUploadFlag()){
+			case 1:
+				up1.add(ul);
+				break;
+			case 2:
+				up2.add(ul);
+				break;
+					
+		}
+	}
+}

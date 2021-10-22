@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.manager.business.dao.IDeviceManagerDao">
+	<select id="loadDeviceType" parameterType = "bd.nmam.manager.business.pojo.DeviceTypePojo" resultType = "bd.nmam.manager.business.pojo.DeviceTypePojo">
+		select * from tb_device_type where 1 = 1
+		<if test="id != null and id != ''">
+			and id = ${id}
+		</if>
+		<if test="typeName != null and typeName != ''">
+			and typeName = #{typeName}
+		</if>
+		<if test="typeCode != null and typeCode != ''">
+			and typeCode = #{typeCode}
+		</if>
+	</select>
+	<insert id="add" parameterType = "bd.nmam.manager.business.pojo.DeviceTypePojo">
+		insert into tb_device_type(typeName, typeCode, imgUrl) values(#{typeName}, #{typeCode}, #{imgUrl})
+	</insert>
+	<delete id="remove" parameterType = "bd.nmam.manager.business.pojo.DeviceTypePojo">
+		delete from tb_device_type from id = ${id}
+	</delete>
+</mapper>

@@ -1,0 +1,9 @@
+package bd.nmam.manager.business.service;
+
+import java.util.List;
+
+import bd.nmam.manager.business.pojo.DeviceTypePojo;
+
+public interface IDeviceManagerService {
+	public String loadDeviceType(DeviceTypePojo dtp);
+}

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.login.business.dao.ILoginDao">
+	<select id="findUser" parameterType = "bd.nmam.login.business.pojo.UserPojo" resultType = "bd.nmam.login.business.pojo.UserPojo">
+		select * from tb_user where 1 = 1
+		<if test="account != null and account != ''">
+			and account = #{account}
+		</if>
+		<if test="organizationId != null and organizationId != ''">
+			and organizationId = #{organizationId}
+		</if>
+	</select>
+	<select id="loadUserInfo" parameterType = "bd.nmam.login.business.pojo.UserPojo" resultType = "bd.nmam.login.business.pojo.UserPojo">
+		select 
+	  		* 
+		from tb_user
+		where tb_user.organizationId = #{organizationId} and account = #{account}
+	</select>
+	<select id="deep" resultType = "Integer">
+		select max(modularLevel) as mmid from tb_modularmenu
+	</select>
+	<select id="loadRole" parameterType = "Integer" resultType = "Integer">
+		SELECT tb_user_role.roleIndex FROM tb_user_role
+			LEFT JOIN tb_user ON tb_user.id = tb_user_role.userIndex
+			WHERE tb_user.id = ${userIndex}
+	</select>
+	<select id="findModular" parameterType = "Integer" resultType = "bd.nmam.login.business.pojo.ModularPojo">
+		SELECT 
+		  tb_modularmenu.id,
+		  tb_modularmenu.modularName,
+		  tb_modularmenu.modularLevel,
+		  tb_modularmenu.modularIndex,
+		  tb_modularmenu.parentId,
+		  tb_modularmenu.url,
+		  tb_modularmenu.icon,
+		  tb_modularmenu.uiName
+		FROM
+		  tb_modularmenu 
+		WHERE tb_modularmenu.id IN 
+		  (SELECT 
+		    tb_role_modular.modularIndex 
+		  FROM
+		    tb_role_modular 
+		  WHERE tb_role_modular.roleIndex IN 
+		    (SELECT 
+		      tb_user_role.roleIndex 
+		    FROM
+		      tb_user 
+		      LEFT JOIN tb_user_role 
+		        ON tb_user.id = tb_user_role.userIndex 
+		    WHERE tb_user.id = ${userIndex})) 
+		  AND tb_modularmenu.modularLevel = ${level} 
+		  AND tb_modularmenu.parentId = ${parentId}
+		ORDER BY tb_modularmenu.modularIndex ASC 
+	</select>
+</mapper>

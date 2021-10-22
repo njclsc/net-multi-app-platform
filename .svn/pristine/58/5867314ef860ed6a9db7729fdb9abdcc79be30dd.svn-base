@@ -1,0 +1,70 @@
+package bd.nmam.collection.business.coder.beidian;
+
+import java.net.InetSocketAddress;
+import java.util.List;
+
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.socket.DatagramPacket;
+import io.netty.handler.codec.MessageToMessageDecoder;
+
+public class BeidianUDPDecoder extends MessageToMessageDecoder<Object>{
+	@Override
+	protected void decode(ChannelHandlerContext arg0, Object arg1, List<Object> arg2)
+			throws Exception {
+		// TODO Auto-generated method stub
+		DatagramPacket dp = (DatagramPacket)arg1;
+		InetSocketAddress isa = dp.sender();
+//		String ip = isa.getHostString();
+//		int port = isa.getPort();
+		String key = isa.getHostString() + ":" + isa.getPort();
+		ByteBuf buf = dp.content();
+		int len = buf.readableBytes();
+		if(len < 7){
+			return;
+		}
+		int head = buf.readByte() & 0xFF;
+//		Logger.getLogger("r1").info("111解码器接收：" + byte2HexString(new byte[]{(byte)head}));
+		if(head == 0x7E){
+			try{
+			byte[] bit = new byte[6];
+			buf.readBytes(bit);
+//			Logger.getLogger("r1").info("222解码器接收：" + byte2HexString(bit));
+			int frameLen = (((bit[4] & 0x0F) << 8) + (bit[5] & 0xFF) + 12); 
+			byte[] bit1 = new byte[frameLen - 7];
+			buf.readBytes(bit1);
+//			Logger.getLogger("r1").info("222解码器接收：" + byte2HexString(bit1));
+			if(((bit1[bit1.length - 1]) & 0xFF) == 13){
+				byte[] tmp = new byte[frameLen];
+				tmp[0] = (byte)head;
+				for(int i = 0; i < bit.length; i++){
+					tmp[i + 1] = bit[i];
+				}
+				for(int i = 0; i < bit1.length; i++){
+					tmp[i + 7] = bit1[i];
+				}
+				String rd = byte2HexString(tmp);
+				arg2.add(key + "####" + rd);
+				String deviceId = rd.substring(16, 32);
+				DevicePojo dpx = ContainerUtil.getDevices().get(deviceId);
+				if(dpx!=null){
+					dpx.setIp(isa.getHostString());
+					dpx.setPort(isa.getPort());
+				}
+			}
+		}catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+	}
+	private String byte2HexString(byte[] bits){
+		StringBuffer sb = new StringBuffer();
+		for(byte bit : bits){
+			sb.append(Integer.toHexString((bit & 0xF0) >> 4));
+			sb.append(Integer.toHexString(bit & 0xF));
+		}
+		return sb.toString().toUpperCase();
+	}
+}

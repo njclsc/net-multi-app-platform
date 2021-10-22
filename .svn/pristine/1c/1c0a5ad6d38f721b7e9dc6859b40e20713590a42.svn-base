@@ -1,0 +1,8 @@
+package bd.nmam.login.business.service;
+
+import java.util.Map;
+
+public interface ILoginService {
+	public String loginCheck(Map<String, String> paramMap);
+	public String loginOut(Map<String, String> paramMap);
+}

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.manager.business.dao.DeviceGroupManagerDao">
+	<insert id="groupAdd" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		insert into tb_devicegroub(groupName) values(#{groupName})
+	</insert>
+	<delete id="groupRemove" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		delete from tb_devicegroub where id = #{id}
+	</delete>
+	<update id="groupModify" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		update tb_devicegroub set groupName = #{groupName} where id = #{id}
+	</update>
+	<select id="groupFind" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo" resultType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		select * from tb_devicegroub where 1 = 1
+		<if test="groupName != null and groupName != ''">
+			and groupName = #{groupName}
+		</if>
+		<if test="page != null and page > 0 and rows != null and rows > 0">
+			limit ${beginRows}, ${rows}
+		</if>
+		
+	</select>
+	<select id="groupFindCount" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo" resultType = "Integer">
+		select count(*) from tb_devicegroub where 1 = 1
+		<if test="groupName != null and groupName != ''">
+			and groupName = #{groupName}
+		</if>
+	</select>
+	<update id="groupDeviceRelation" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		update tb_device set deviceGroupIndex = #{id} where id in 
+		<foreach collection="deviceIndexs" separator = "," open = "(" close = ")" item = "item">
+			${item}
+		</foreach>
+	</update>
+	<update id="groupDeviceUnRelation" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		update tb_device set deviceGroupIndex = -1 where id in 
+		<foreach collection="deviceIndexs" separator = "," open = "(" close = ")" item = "item">
+			${item}
+		</foreach>
+	</update>
+	<insert id="groupUserRelation" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		insert into tb_user_devicegroup(userIndex, deviceGroupIndex) values 
+		<foreach collection="groupIndexs" separator = "," item = "item">
+			(${userIndex}, ${item})
+		</foreach>
+	</insert>
+	<delete id="groupUserUnRelation" parameterType = "bd.nmam.manager.business.pojo.DeviceGroupPojo">
+		delete from tb_user_devicegroup where 
+		<if test="userIndex != null and userIndex > 0">
+			userIndex = ${userIndex}
+		</if>
+		<if test="groupIndexs != null and groupIndexs.length > 0">
+			and deviceGroupIndex in 
+			<foreach collection="groupIndexs" separator = "," open = "(" close = ")" item = "item">
+				${item}
+			</foreach>
+		</if>
+	</delete>
+	<select id="findArea" parameterType = "bd.nmam.manager.business.pojo.DeviceTreePojo" resultType = "bd.nmam.manager.business.pojo.DeviceTreePojo">
+		select id as area_id,
+			 areaName as area_areaName,
+			 districtId as area_districtId,
+			 areaLevel as area_areaLevel,
+			 areaCode as area_areaCode,
+			 address as area_address,
+			 parentAreaCode as area_parentAreaCode 
+		from tb_area 
+		where 1 = 1
+		<if test="organ_organizationCode != null and organ_organizationCode != ''">
+			and organizationCode = #{organ_organizationCode}
+		</if>
+		<if test="area_parentAreaCode == null">
+			and parentAreaCode is NULL
+		</if>
+		<if test="area_parentAreaCode != null and area_parentAreaCode != ''">
+			and parentAreaCode = #{area_parentAreaCode}
+		</if>
+			 
+	</select>
+	<select id="findAllOrganizationOfArea" resultType = "String">
+		select organizationCode from tb_area group by organizationCode
+	</select>
+	<select id="findOrganization" parameterType = "bd.nmam.manager.business.pojo.DeviceTreePojo" resultType = "bd.nmam.manager.business.pojo.DeviceTreePojo">
+			select id as organ_id, organizationCode as organ_organizationCode, organizationLevel as organ_organizationLevel, organizationName as organ_organizationName, 
+				parentOrganizationCode as organ_parentOrganizationCode from tb_organization
+			where 1 = 1
+			<if test="organ_parentOrganizationCode == '0000000'">
+				and parentOrganizationCode = #{organ_parentOrganizationCode}
+			</if>
+			<if test="organ_parentOrganizationCode != '0000000'">
+			 	and parentOrganizationCode = #{organ_organizationCode}
+			</if>
+	</select>
+</mapper>

@@ -1,0 +1,25 @@
+package bd.nmam.login.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class AppConfigure {
+	private static int organizationId;
+	
+	@Bean
+	public Object initInfo(@Value("${service.organizationId}")int organizationId){
+		AppConfigure.setOrganizationId(organizationId);
+		return null;
+	}
+
+	public static int getOrganizationId() {
+		return organizationId;
+	}
+
+	public static void setOrganizationId(int organizationId) {
+		AppConfigure.organizationId = organizationId;
+	}
+	
+}

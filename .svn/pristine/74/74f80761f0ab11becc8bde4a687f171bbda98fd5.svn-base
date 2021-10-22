@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.manager.business.dao.UserManagerDao">
+
+	<insert id="add" parameterType = "bd.nmam.manager.business.pojo.UserPojo">
+		insert into tb_user(account, password, organizationId, createAccount, createDateTime) 
+			values(#{account}, #{password}, #{organizationId}, #{createAccount}, #{createDateTime})
+	</insert>
+	<delete id="remove" parameterType = "bd.nmam.manager.business.pojo.UserPojo">
+		delete from tb_user where id = ${id}
+	</delete>
+	<update id="modify" parameterType = "bd.nmam.manager.business.pojo.UserPojo">
+		update tb_user set account = #{account}, password = #{password}, organizationId = ${organizationId},
+			modifyDateTime = #{modifyDateTime}, modifyAccount = #{modifyAccount}
+		where id = ${id}
+	</update>
+	<select id="find" parameterType = "bd.nmam.manager.business.pojo.UserPojo" 
+			resultType = "bd.nmam.manager.business.pojo.UserPojo">
+		select 
+		  t1.id,
+		  t1.account,
+		  t1.password,
+		  t1.organizationId,
+		  t2.account as createAccount,
+		  t3.account as modifyAccount,
+		  t1.createDateTime,
+		  t1.modifyDateTime
+		from tb_user as t1
+		left JOIN tb_user AS t2 ON t1.createAccount = t2.id
+		left join tb_user AS t3 ON t1.createAccount = t3.id
+		where 1 = 1
+		<if test="id != null and id &gt; 0">
+			and t1.id = ${id}
+		</if>
+		<if test="account != null and account != ''">
+			and t1.account like concat('%', #{account}, '%')
+		</if>
+		<if test="organizationId != null and organizationId &gt; 0">
+			and t1.organizationId = ${organizationId}
+		</if>
+		<if test="createAccount != null and createAccount != ''">
+			and t1.createAccount = #{createAccount}
+		</if>
+		<if test="modifyAccount != null and modifyAccount != ''">
+			and t1.modifyAccount = #{modifyAccount}
+		</if>
+		<if test="beginDateTime != null and beginDateTime != ''">
+			and t1.createDateTime &gt;= #{beginDateTime}
+		</if>
+		<if test="endDateTime != null and endDateTime != ''">
+			and t1.createDateTime &lt;= #{endDateTime}
+		</if>
+		limit ${beginRow}, ${rows}
+	</select>
+	<select id="findCount" parameterType = "bd.nmam.manager.business.pojo.UserPojo" resultType = "Integer">
+		select 
+		  count(*)
+		from tb_user as t1
+		INNER JOIN tb_user AS t2 ON t1.createAccount = t2.id 
+		
+		where 1 = 1
+		<if test="id != null and id &gt; 0">
+			and id = ${id}
+		</if>
+		<if test="account != null and account != ''">
+			and t1.account like concat('%', #{account}, '%')
+		</if>
+		<if test="organizationId != null and organizationId &gt; 0">
+			and t1.organizationId = ${organizationId}
+		</if>
+		<if test="createAccount != null and createAccount != ''">
+			and t1.createAccount = #{createAccount}
+		</if>
+		<if test="modifyAccount != null and modifyAccount != ''">
+			and t1.modifyAccount = #{modifyAccount}
+		</if>
+		<if test="beginDateTime != null and beginDateTime != ''">
+			and t1.createDateTime &gt;= #{beginDateTime}
+		</if>
+		<if test="endDateTime != null and endDateTime != ''">
+			and t1.createDateTime &lt;= #{endDateTime}
+		</if>
+	</select>
+	<select id = "count" parameterType = "bd.nmam.manager.business.pojo.UserPojo" resultType = "Integer">
+		select count(*) from tb_user where account = #{account}
+	</select>
+	<select id="showUserAndRole" parameterType = "bd.nmam.manager.business.pojo.UserPojo" resultType = "bd.nmam.manager.business.pojo.RolePojo">
+		SELECT tb_role.* FROM tb_role WHERE tb_role.id NOT IN (
+			SELECT tb_user_role.roleIndex FROM tb_user_role WHERE tb_user_role.userIndex = #{id}
+		)
+	</select>
+	<insert id="updateUserAndRole" parameterType = "bd.nmam.manager.business.pojo.UserRolePojo">
+		insert into tb_user_role(userIndex, roleIndex, organizationIndex) values 
+		<foreach collection="list" item = "item" separator = ",">
+			(#{item.userIndex}, #{item.roleIndex}, #{item.organizationIndex})
+		</foreach>
+	</insert>
+</mapper>

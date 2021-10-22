@@ -1,0 +1,386 @@
+package bd.nmam.collection.business.handler.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.InetSocketAddress;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import bd.nmam.collection.business.pojo.beidian.Alarm;
+import bd.nmam.collection.business.pojo.beidian.AlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.AlarmPreSetPojo;
+import bd.nmam.collection.business.pojo.beidian.DeviceCommandPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.business.pojo.beidian.TheTimlyAlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.Upload;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.socket.DatagramPacket;
+
+public class BeidianUDPSetHandler extends ChannelInboundHandlerAdapter{
+	private final String TYPE_ALARM_SET = "1C";
+	private HashMap<String, TheTimlyAlarmPojo> timlyAlarmBuf;
+	private List<Upload> up1;
+	private List<Upload> up2;
+	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	private String deviceId;
+
+	@Override
+	public void channelActive(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+		// super.channelActive(ctx);
+		// System.out.println(ctx.channel().remoteAddress().toString());
+		this.timlyAlarmBuf = ContainerUtil.getTimlyAlarmBuf();
+		this.up1 = ContainerUtil.getUp1();
+		this.up2 = ContainerUtil.getUp2();
+		// ContainerUtil.getTcpClientFuture().put(ctx.channel().remoteAddress().toString().substring(1),
+		// ctx.channel());
+		ctx.fireChannelActive();
+	}
+
+	@Override
+	public void channelRead(ChannelHandlerContext ctx, Object msg)
+			throws Exception {
+		// TODO Auto-generated method stub
+		String data = (String) msg;
+		Logger.getLogger("r3").info(data);
+		String[] datas = data.split("####");
+		// System.out.println(data.substring(8, 10));
+		switch (datas[1].substring(8, 10)) {
+		case TYPE_ALARM_SET:
+			System.out.println("预置 " + data);
+			operate(datas[1]);
+			String[] addr = datas[0].split(":");
+			ByteBuf deviceResponse = Unpooled.copiedBuffer(ContainerUtil
+					.report(datas[1]));
+			DatagramPacket dp = new DatagramPacket(deviceResponse,
+					new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+			ctx.writeAndFlush(dp);
+			Logger.getLogger("r3").info(datas[1]);
+			Thread.sleep(1000);
+			//缓存指令下发
+			deviceId = datas[1].substring(16, 32);
+			DeviceCommandPojo dcp = ContainerUtil.getDeviceCommBuf().get(deviceId);
+			if(dcp!=null){
+			dcp.setAddress(addr[0]);
+			dcp.setPort(addr[1]);
+			//==================================================
+			List<String> index = dcp.get_INDEX();
+			List<String> cmd = dcp.get_CMD();
+			for(int i = 0; i < index.size(); i++){
+				String[] _index = index.get(i).split("#");
+				if(_index[2].equals("0") && !_index[3].equals(_index[0])){
+					System.out.println("send 7");
+					byte[] data1 = ContainerUtil.message2Bytes(cmd.get(i));
+					ByteBuf deviceCMD = Unpooled.copiedBuffer(data1);
+					DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+							new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+					ctx.writeAndFlush(dpCMD);
+					index.set(i, _index[0] + "#" + (Integer.parseInt(_index[1]) + 1) + "#" + _index[2] + "#" + _index[3]);
+					break;//设备端接收能力有限，发送一帧缓存指令后，中断发送循环
+				}
+			}
+			//==================================================
+//			if(dcp!=null && dcp.getCMD()!=null && dcp.getIssueFlag()==1){
+//				String CMD = dcp.getCMD();
+//				byte[] cmd = ContainerUtil.message2Bytes(CMD);
+//				ByteBuf deviceCMD = Unpooled.copiedBuffer(cmd);
+//				DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+//					new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+//				ctx.writeAndFlush(dpCMD);
+//			}
+			}
+			break;
+		default:
+			ctx.fireChannelRead(msg);
+			break;
+		}
+	}
+
+	@Override
+	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+		// super.channelReadComplete(ctx);
+	}
+
+	@Override
+	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+			throws Exception {
+		// TODO Auto-generated method stub
+		// super.exceptionCaught(ctx, cause);
+		cause.printStackTrace();
+		StringWriter sw = new StringWriter();
+		cause.printStackTrace(new PrintWriter(sw));
+		ContainerUtil.getLoggerWrite().error(sw.toString());
+	}
+
+	private void operate(String data) {
+		String deviceId = data.substring(16, 32);
+		if (ContainerUtil.checkSUM(data)) {
+			DevicePojo dp = ContainerUtil.getDevices().get(deviceId);
+			if (dp == null) {
+				System.out.println("该" + deviceId + "设备不在档案内，请检查设备基础信息");
+			} else {
+				dp.setRefreshTime(System.currentTimeMillis());
+				List<AlarmPojo> aps = new ArrayList<AlarmPojo>();
+				// 数据解析
+				int switchAlarmLen = Integer.parseInt(data.substring(32, 36),
+						16);
+				int analogAlarmLen = Integer.parseInt(data.substring(36, 40),
+						16);
+				// int sumAlarm = switchAlarmLen + analogAlarmLen;
+				int j = 40;
+				String[] switchAlarm = new String[switchAlarmLen];//
+				String[] switchAlarmstate = new String[switchAlarmLen];
+				String[] switchState = new String[switchAlarmLen];
+				String[] analogAlarm = new String[analogAlarmLen];//
+				String[] analogAlarmState = new String[analogAlarmLen];
+				String[] analogData = new String[analogAlarmLen];
+				// switch
+				for (int i = 0; i < switchAlarmLen; i++) {
+					switchAlarm[i] = data.substring(j, j + 8);
+					j = j + 8;
+					switchAlarmstate[i] = data.substring(j, j + 1);
+					j = j + 1;
+					switchState[i] = data.substring(j, j + 1);
+					j = j + 1;
+					//告警屏蔽 by seifer 20191231
+					boolean shieldFlag = ContainerUtil.signalIDCheck(switchAlarm[i]);
+					if(shieldFlag){
+					AlarmPojo ap = new AlarmPojo();
+					ap.setSignalId(switchAlarm[i]);
+					ap.setAlarmStatus(Integer.parseInt(switchAlarmstate[i], 16));
+					ap.setSwitchStatus(Integer.parseInt(switchState[i], 16));
+					ap.setUploadTime(System.currentTimeMillis());
+					ap.setTypeFlag("switch");
+					aps.add(ap);
+					}
+				}
+				// analog
+				for (int k = 0; k < analogAlarmLen; k++) {
+					analogAlarm[k] = data.substring(j, j + 8);
+					j = j + 8;
+					analogAlarmState[k] = data.substring(j + 1, j + 2);
+					j = j + 2;
+					analogData[k] = String.valueOf(ContainerUtil
+							.getFloat(ContainerUtil.hexStrToBytes(data
+									.substring(j, j + 8))));
+					j = j + 8;
+					//告警屏蔽 by seifer 20191231
+					boolean shieldFlag = ContainerUtil.signalIDCheck(analogAlarm[k]);
+					if(shieldFlag){
+					AlarmPojo ap = new AlarmPojo();
+					ap.setSignalId(analogAlarm[k]);
+					ap.setAlarmStatus(Integer.parseInt(analogAlarmState[k], 16));
+					ap.setUploadTime(System.currentTimeMillis());
+					ap.setAnalogValue(analogData[k]);
+					ap.setTypeFlag("analog");
+					aps.add(ap);
+					}
+				}
+				// 预置告警生成
+				List<AlarmPojo> alarm = alarmPreSet(dp, aps);
+				for (AlarmPojo ap : alarm) {
+					switch (dp.getAlarmFlag()) {
+					case 1:
+						dp.getAlarms1().add(ap);
+						break;
+					case 2:
+						dp.getAlarms2().add(ap);
+						break;
+					}
+					ContainerUtil.refreshPreSet(dp, ap);
+					if (ap.getTypeFlag().equalsIgnoreCase("analog")) {
+						String key = deviceId + "#" + ap.getSignalId();
+						TheTimlyAlarmPojo ttap = timlyAlarmBuf.get(key);
+						if (ttap == null) {
+							ttap = new TheTimlyAlarmPojo();
+							ttap.setDeviceId(deviceId);
+							ttap.setSignalId(ap.getSignalId());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+							ttap.setAnalogValue(ap.getAnalogValue());
+							ttap.setUploadTime(ap.getUploadTime());
+							ttap.setChangeFlag(false);
+							ttap.setNewFlag(true);
+							timlyAlarmBuf.put(key, ttap);
+						} else {
+							ttap.setAnalogValue(ap.getAnalogValue());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+							ttap.setChangeFlag(true);
+							ttap.setNewFlag(false);
+							ttap.setUploadTime(ap.getUploadTime());
+						}
+					} else if (ap.getTypeFlag().equalsIgnoreCase("switch")) {
+						String key = deviceId + "#" + ap.getSignalId();
+						TheTimlyAlarmPojo ttap = timlyAlarmBuf.get(key);
+						if (ttap == null) {
+							ttap = new TheTimlyAlarmPojo();
+							ttap.setDeviceId(deviceId);
+							ttap.setSignalId(ap.getSignalId());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+							ttap.setSwitchStatus(ap.getSwitchStatus());
+							ttap.setUploadTime(ap.getUploadTime());
+							ttap.setChangeFlag(true);
+							ttap.setNewFlag(true);
+							timlyAlarmBuf.put(key, ttap);
+						} else {
+							ttap.setSwitchStatus(ap.getSwitchStatus());
+							ttap.setAlarmStatus(ap.getAlarmStatus());
+							ttap.setChangeFlag(true);
+							ttap.setUploadTime(ap.getUploadTime());
+						}
+					}
+				}
+				ContainerUtil.refreshState(dp);
+				// 告警预置WEB推送
+				alarmPresetUploadOperate(dp, alarm);
+				// ContainerUtil.report(data);
+			}
+		} else {
+			System.out.println(deviceId + "设备告警预置指令校验失败");
+		}
+	}
+
+	private void alarmPresetUploadOperate(DevicePojo dp, List<AlarmPojo> alarm) {
+		// TODO Auto-generated method stub
+		Upload ul = new Upload();
+		ul.setFrameTime(sdf.format(new Date()));
+		int alarmCount = alarm.size();
+		String sumAlarm = String.valueOf(alarmCount);
+		ul.setInfoCount(sumAlarm + "#" + "0#" + "0#0");
+		ul.setPlatformID("xxxxxxxx");
+		ul.setDeviceID(dp.getDeviceId());
+		ul.setFrameType("data");
+		if (alarmCount > 0) {
+			Alarm[] Alarms = new Alarm[alarmCount];
+			// AlarmPojo[] array = (AlarmPojo[])alarm.toArray();
+			int i = 0;
+			for (AlarmPojo ap : alarm) {
+				Alarm am = new Alarm();
+				am.setInfoID(ap.getSignalId());
+				String AlarmState = String.valueOf(ap.getAlarmStatus());
+				am.setAlarmState(AlarmState);
+				am.setTime(sdf.format(new Date()));
+				Alarms[i] = am;
+				i++;
+			}
+
+			ul.setAlarm(Alarms);
+			// 加入推送缓存
+			switch (ContainerUtil.getUploadFlag()) {
+			case 1:
+				up1.add(ul);
+				break;
+			case 2:
+				up2.add(ul);
+				break;
+			}
+		}
+	}
+
+	// 预置告警与缓存中的告警进行比较，生成存储告警
+	private static List<AlarmPojo> alarmPreSet(DevicePojo dp,
+			List<AlarmPojo> aps) {
+		HashMap<String, AlarmPojo> alarmPreSet = new HashMap<String, AlarmPojo>();
+		for (AlarmPojo ap : aps) {
+			String sid = ap.getSignalId();
+			alarmPreSet.put(sid, ap);
+		}
+		List<AlarmPojo> apss = new ArrayList<AlarmPojo>();
+		// 告警缓存中有值
+		if (!dp.getAlarmPreSet().isEmpty()) {
+			// int i = dp.getAlarmPreSet().size();
+			Iterator<Map.Entry<String, AlarmPojo>> itra = alarmPreSet
+					.entrySet().iterator();
+			Iterator<Map.Entry<String, AlarmPreSetPojo>> itr = dp
+					.getAlarmPreSet().entrySet().iterator();
+			while (itr.hasNext()) {
+				Entry entry = itr.next();
+				AlarmPreSetPojo cache = (AlarmPreSetPojo) entry.getValue();
+				String signalId = (String) entry.getKey();
+				// 缓存与告警中均存在该告警
+				if (alarmPreSet.containsKey(signalId)) {
+					// 告警状态不同,则存储预置告警
+					if (cache.getAlarmStatus() != alarmPreSet.get(signalId)
+							.getAlarmStatus()) {
+						// 缓存更新
+						cache.setAlarmStatus(alarmPreSet.get(signalId)
+								.getAlarmStatus());
+						cache.setAnalogValue(alarmPreSet.get(signalId)
+								.getAnalogValue());
+						cache.setSwitchStatus(alarmPreSet.get(signalId)
+								.getSwitchStatus());
+						cache.setUploadTime(alarmPreSet.get(signalId)
+								.getUploadTime());
+						cache.setAp(alarmPreSet.get(signalId));
+						// 添加下发告警
+						// AlarmPojo ap = new AlarmPojo();
+						// ap.setAlarmStatus(alarmPreSet.get(signalId).getAlarmStatus());
+						// ap.setAnalogValue(alarmPreSet.get(signalId).getAnalogValue());
+						// //ap.setConfirmState(confirmState)
+						// ap.setSignalId(alarmPreSet.get(signalId).getSignalId());
+						// ap.setSwitchStatus(alarmPreSet.get(signalId).getSwitchStatus());
+						// ap.setTypeFlag(alarmPreSet.get(signalId).getTypeFlag());
+						// ap.setUploadTime(alarmPreSet.get(signalId).getUploadTime());
+						apss.add(alarmPreSet.get(signalId));
+					}
+				}
+				// 缓存中存在，告警中不存在该告警
+				else {
+					if (cache.getAlarmStatus() == 1) {
+						// 缓存更新
+						cache.setAlarmStatus(0);
+						cache.setAnalogValue("preset");
+						cache.setSwitchStatus(10);
+						cache.setUploadTime(System.currentTimeMillis());
+						// 添加下发告警
+						AlarmPojo ap = new AlarmPojo();
+						ap.setAlarmStatus(cache.getAlarmStatus());
+						ap.setAnalogValue(cache.getAnalogValue());
+						// ap.setConfirmState(confirmState)
+						ap.setSignalId(cache.getSignalId());
+						ap.setSwitchStatus(cache.getSwitchStatus());
+						ap.setTypeFlag(cache.getTypeFlag());
+						ap.setUploadTime(cache.getUploadTime());
+						apss.add(ap);
+						cache.setAp(ap);
+					}
+				}
+			}
+			while (itra.hasNext()) {
+				Entry entry = itra.next();
+				AlarmPojo alarm = (AlarmPojo) entry.getValue();
+				String signalId = (String) entry.getKey();
+				// 预置告警中存在，告警缓存中无
+				if (!dp.getAlarmPreSet().containsKey(signalId)) {
+					// 缓存更新
+					AlarmPreSetPojo apsp = new AlarmPreSetPojo();
+					apsp.setAlarmStatus(alarm.getAlarmStatus());
+					apsp.setAnalogValue(alarm.getAnalogValue());
+					apsp.setSwitchStatus(alarm.getSwitchStatus());
+					apsp.setUploadTime(alarm.getUploadTime());
+					apsp.setAp(alarmPreSet.get(signalId));
+					apsp.setSignalId(signalId);
+					apsp.setTypeFlag(alarm.getTypeFlag());
+					dp.getAlarmPreSet().put(signalId, apsp);
+					// 添加下发告警
+					apss.add(alarmPreSet.get(signalId));
+				}
+			}
+			return apss;
+		} else {
+			apss.addAll(aps);
+			return apss;
+		}
+
+	}
+}

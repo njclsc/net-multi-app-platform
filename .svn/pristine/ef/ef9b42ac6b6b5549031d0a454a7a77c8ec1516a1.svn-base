@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.history.business.dao.StaticSourceDao">
+	<select id="findAreaById" parameterType = "Integer" resultType = "bd.nmam.history.business.pojo.AreaPojo">
+		select *, imageUrl as imgUrl from tb_area where id = ${id}
+	</select>
+	<update id="modifyDB" parameterType = "bd.nmam.history.business.pojo.AreaPojo">
+		update tb_area set imageUrl = #{imgUrl} where id = ${id}
+	</update>
+	<insert id="firmwareOperate" parameterType = "bd.nmam.history.business.pojo.FirmwarePojo">
+		<if test="operate != null and operate == 'add'">
+			insert into tb_firmware(uploadUser, uploadTime, filewareName, serverName, servletPath) values(
+				#{uploadUser}, #{uploadTime}, #{filewareName}, #{serverName}, #{servletPath}
+			)
+		</if>
+		<if test="operate != null and operate == 'remove'">
+			delete from tb_firmware where uploadUser = #{uploadUser} and uploadTime = #{uploadTime} and filewareName = #{filewareName}
+		</if>
+	</insert>
+</mapper>

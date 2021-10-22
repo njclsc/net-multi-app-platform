@@ -1,0 +1,46 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+import bd.nmam.collection.util.beidian.ContainerUtil;
+
+public class BeidianReciveCommand_ForUDP_TCPPort_Thread implements Runnable{
+	private ServerSocket server;
+	private String ip;
+	private int port;
+	public BeidianReciveCommand_ForUDP_TCPPort_Thread(String address) throws IOException{
+		String[] adr = address.split(":");
+		this.ip = adr[0];
+		this.port = Integer.parseInt(adr[1]);
+		this.server = new ServerSocket();
+		InetSocketAddress isa = new InetSocketAddress(ip, port);
+		server.bind(isa);
+	}
+	public void run(){
+		while(!server.isClosed()){
+			try {
+				
+				Socket s = server.accept();
+//				BeidianReciveCommandChirdThread rcct = new BeidianReciveCommandChirdThread(s);
+//				rcct.start();
+				BeidianReciveCommandForUDP_ReciveTCPCommand rcfur = new BeidianReciveCommandForUDP_ReciveTCPCommand(s);
+//				rcfur.start();
+				new Thread(rcfur).start();
+				System.out.println("server print : " + s);
+				Thread.sleep(1);
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+				
+			}
+		}
+	}
+}

@@ -1,0 +1,26 @@
+package bd.nmam.manager.business.dao;
+
+import java.util.List;
+
+import org.springframework.stereotype.Repository;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import bd.nmam.manager.business.pojo.ModularPojo;
+import bd.nmam.manager.business.pojo.RoleModularPojo;
+import bd.nmam.manager.business.pojo.RolePojo;
+
+
+@Repository
+public interface RoleManagerDao {
+	public void add(RolePojo Role);
+	public void remove(RolePojo Role);
+	public void modify(RolePojo Role);
+	public List<RolePojo> find(RolePojo Role);
+	public int findCount(RolePojo Role);
+	public int count(RolePojo Role);
+	public List<ModularPojo> showRoleAndModular(RolePojo role);
+	public void updateRoleAndModular(List<RoleModularPojo> role);
+	public List<ModularPojo> haveRoleAndModular(RolePojo role);
+	public void removeRoleAndModular(RoleModularPojo role);
+}

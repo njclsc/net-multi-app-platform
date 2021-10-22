@@ -1,0 +1,56 @@
+package bd.nmam.manager.business.controller;
+
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import bd.nmam.manager.business.pojo.RoleModularPojo;
+import bd.nmam.manager.business.pojo.RolePojo;
+import bd.nmam.manager.business.service.IRoleManagerService;
+
+@RestController
+@RequestMapping(value = "/role", produces="application/json;charset=utf-8")
+public class RoleManagerController {
+	@Autowired
+	@Qualifier("RoleManagerServiceImp")
+	private IRoleManagerService roleManagerService;
+	@RequestMapping("add")
+	public String add(@RequestBody RolePojo role, HttpServletRequest request){
+		return roleManagerService.add(role, request);
+	}
+	@RequestMapping("remove")
+	public String remove(@RequestBody RolePojo role){
+		return roleManagerService.remove(role);
+	}
+	@RequestMapping("modify")
+	public String remove(@RequestBody RolePojo role, HttpServletRequest request){
+		return roleManagerService.modify(role, request);
+	}
+	@RequestMapping("find")
+	public String find(@RequestBody RolePojo role){
+		return roleManagerService.find(role);
+	}
+	//权限分配
+	@RequestMapping("showRoleAndModular")
+	public String showRoleAndModular(@RequestBody RolePojo role){
+		return roleManagerService.showRoleAndModular(role);
+	}
+	@RequestMapping("updateRoleAndModular")
+	public String updateRoleAndModular(@RequestBody List<RoleModularPojo> role){
+		return roleManagerService.updateRoleAndModular(role);
+	}
+	@RequestMapping("haveRoleAndModular")
+	public String haveRoleAndModular(@RequestBody RolePojo role){
+		return roleManagerService.haveRoleAndModular(role);
+	}
+	@RequestMapping("removeRoleAndModular")
+	public String removeRoleAndModular(@RequestBody RoleModularPojo role){
+		return roleManagerService.removeRoleAndModular(role);
+	}
+}

@@ -1,0 +1,300 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.Di;
+import bd.nmam.collection.business.pojo.beidian.TheTimlyAlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.Upload;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianTimlyOperateThread implements Runnable{
+	private HashMap<String, TheTimlyAlarmPojo> timlyAlarmBuf;
+	private long rate;
+	private DataSource ds;
+	private SimpleDateFormat sdfStand;
+	private List<Upload> up1;
+	private List<Upload> up2;
+	
+	public BeidianTimlyOperateThread(long rate){
+		this.timlyAlarmBuf = ContainerUtil.getTimlyAlarmBuf();
+		this.rate = rate;
+		this.ds = DatabaseUtil.getDataSource();
+		this.sdfStand = ContainerUtil.getSdfStand();
+		this.up1 = ContainerUtil.getUp1();
+		this.up2 = ContainerUtil.getUp2();
+	}
+	public void run(){
+		while(true){
+			//ContainerUtil.getLoggerWrite().error("实时告警存储线程存活");
+			try{
+				alarmOperate();
+				Thread.sleep(rate);
+			}catch(Exception e){
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			}
+		}
+	}
+	private void alarmOperate(){
+		Connection con = null;
+		Statement statNew = null;
+		try{
+			con = ds.getConnection();
+			StringBuffer sb1 = new StringBuffer();
+//			StringBuffer sbDi = new StringBuffer();
+//			StringBuffer sbDo = new StringBuffer();
+			StringBuffer sbAlg = new StringBuffer();
+			StringBuffer sbSwh = new StringBuffer();
+//			StringBuffer sb2 = new StringBuffer();
+			
+			sbAlg.append("insert into tb_current_analog(deviceId, signalName, signalValue, uploadDateTime) values");
+//			sbDo.append("insert into tb_current_switch(deviceId, signalName, signalStatus, uploadDateTime) values");
+//			sbDi.append("insert into tb_current_switch(deviceId, signalName, signalStatus, uploadDateTime) values");
+			sbSwh.append("insert into tb_current_switch(deviceId, signalName, signalStatus, uploadDateTime) values");
+			sb1.append("insert into tb_current_alarm(deviceId, signalName, alarmStatus, switchStatus, analogValue, uploadDateTime) values");
+//			sb2.append("update tb_current_alarm set ");
+			Iterator<Map.Entry<String, TheTimlyAlarmPojo>> itr = timlyAlarmBuf.entrySet().iterator();
+			int newCount = 0;
+//			int diCount = 0;
+//			int doCount = 0;
+			int swhCount = 0;
+			int algCount = 0;
+			while(itr.hasNext()){
+				Map.Entry<String, TheTimlyAlarmPojo> entry = itr.next();
+				String key = entry.getKey();
+				TheTimlyAlarmPojo ttap = entry.getValue();
+				String deviceId = ttap.getDeviceId();
+				String signalName = ttap.getSignalId();
+				//==========================alarm=======================
+				//new operate
+				if(ttap.isNewFlag()){
+					sb1.append(",('");sb1.append(deviceId);sb1.append("', '");
+					sb1.append(signalName);sb1.append("', '");
+					sb1.append(ttap.getAlarmStatus());sb1.append("', '");
+					sb1.append(ttap.getSwitchStatus());sb1.append("', '");
+					sb1.append(ttap.getAnalogValue());sb1.append("', '");
+					sb1.append(sdfStand.format(ttap.getUploadTime()));sb1.append("')");
+					ttap.setNewFlag(false);
+					newCount += 1;
+				//old operate
+				}else if(ttap.isChangeFlag()){
+					StringBuffer sb2 = new StringBuffer();
+					sb2.append("update tb_current_alarm set ");
+					sb2.append("alarmStatus = '");sb2.append(ttap.getAlarmStatus());sb2.append("', ");
+					sb2.append("switchStatus = '");sb2.append(ttap.getSwitchStatus());sb2.append("', ");
+					sb2.append("analogValue = '"); sb2.append(ttap.getAnalogValue());sb2.append("', ");
+					sb2.append("uploadDateTime = '");sb2.append(sdfStand.format(ttap.getUploadTime()));sb2.append("' where deviceId = '");
+					sb2.append(deviceId); sb2.append("' and signalName = '");sb2.append(signalName);sb2.append("'");
+					ttap.setChangeFlag(false);
+					Statement oldStat = con.createStatement();
+					oldStat.executeUpdate(sb2.toString());
+					oldStat.close();
+				}
+				//==========================switch=======================
+				if(ttap.isSwitchNewFlag()){
+					sbSwh.append(",('");sbSwh.append(deviceId);sbSwh.append("', '");
+					sbSwh.append(ttap.getSwitchSignalId());sbSwh.append("', '");
+					if(ttap.getSwhStatus() == 0){
+						sbSwh.append("OFF");
+					}else if(ttap.getSwhStatus() == 1){
+						sbSwh.append("ON");
+					}else{
+						sbSwh.append(String.valueOf(ttap.getSwhStatus()));
+					}
+					sbSwh.append("', '");
+					sbSwh.append(sdfStand.format(ttap.getSwitchUploadTime()));sbSwh.append("')");
+					swhCount += 1;
+					ttap.setSwitchNewFlag(false);
+					ttap.setSwitchChangeFlag(false);
+					//老挝项目临时增加开关量状态上报 by seifer 201218
+					if(ttap.isSwitchPushFlag()){
+						if(ttap.getSwitchSignalId().equals("38100510")||ttap.getSwitchSignalId().equals("38100520")||ttap.getSwitchSignalId().equals("38100530")||ttap.getSwitchSignalId().equals("38100540")||ttap.getSwitchSignalId().equals("38100550")||ttap.getSwitchSignalId().equals("38100560")){
+							switchUploadOperate(deviceId,ttap);
+							ttap.setSwitchPushFlag(false);
+						}
+					}
+				}else if(ttap.isSwitchChangeFlag()){
+					StringBuffer sb2 = new StringBuffer();
+					sb2.append("update tb_current_switch set ");
+					sb2.append("signalStatus = '");
+					if(ttap.getSwhStatus() == 0){
+						sb2.append("OFF");
+					}else if(ttap.getSwhStatus() == 1){
+						sb2.append("ON");
+					}else{
+						sb2.append(String.valueOf(ttap.getSwhStatus()));
+					}
+					sb2.append("', uploadDateTime = '");
+					sb2.append(sdfStand.format(ttap.getSwitchUploadTime()));
+					sb2.append("' where deviceId = '");
+					sb2.append(deviceId);sb2.append("' and signalName = '");
+					sb2.append(ttap.getSwitchSignalId());sb2.append("'");
+					ttap.setSwitchChangeFlag(false);
+					Statement oldStat = con.createStatement();
+					oldStat.executeUpdate(sb2.toString());
+					oldStat.close();
+					//老挝项目临时增加开关量状态上报 by seifer 201218
+					if(ttap.isSwitchPushFlag()){
+						if(ttap.getSwitchSignalId().equals("38100510")||ttap.getSwitchSignalId().equals("38100520")||ttap.getSwitchSignalId().equals("38100530")||ttap.getSwitchSignalId().equals("38100540")||ttap.getSwitchSignalId().equals("38100550")||ttap.getSwitchSignalId().equals("38100560")){
+							switchUploadOperate(deviceId,ttap);
+							ttap.setSwitchPushFlag(false);
+						}
+					}
+				}
+				//==========================do=======================
+//				if(ttap.isDoNewFlag()){
+//					sbDo.append(",('");sbDo.append(deviceId);sbDo.append("', '");
+//					sbDo.append(ttap.getDoSignalId());sbDo.append("', '");
+//					if(ttap.getDoStatus() == 0){
+//						sbDo.append("OFF");
+//					}else{
+//						sbDo.append("ON");
+//					}
+//					sbDo.append("', '");
+////					System.out.println(ttap.getDoUploadTime());
+//					sbDo.append(ttap.getDoUploadTime());sbDo.append("')");
+//					doCount += 1;
+//					ttap.setDoNewFlag(false);
+//					ttap.setDoChangeFlag(false);
+//				}else if(ttap.isDoChangeFlag()){
+//					StringBuffer sb2 = new StringBuffer();
+//					sb2.append("update tb_current_switch set ");
+//					sb2.append("signalStatus = '");
+//					if(ttap.getDoStatus() == 0){
+//						sb2.append("OFF");
+//					}else{
+//						sb2.append("ON");
+//					}
+//					sb2.append("', uploadDateTime = '");
+//					sb2.append(ttap.getDoUploadTime());
+//					sb2.append("' where deviceId = '");
+//					sb2.append(deviceId);sb2.append("' and signalName = '");
+//					sb2.append(ttap.getSignalId());sb2.append("'");
+//					ttap.setDoChangeFlag(false);
+//					Statement oldStat = con.createStatement();
+//					oldStat.executeUpdate(sb2.toString());
+//					oldStat.close();
+//				}
+				//==========================alg=======================
+				if(ttap.isAlgNewFlag()){
+					sbAlg.append(",('");sbAlg.append(deviceId);sbAlg.append("', '");
+					sbAlg.append(ttap.getAnalogSignalId());sbAlg.append("', '");
+					sbAlg.append(ttap.getAlgValue());sbAlg.append("', '");
+					sbAlg.append(sdfStand.format(ttap.getAnalogUploadTime()));sbAlg.append("')");
+					ttap.setAlgNewFlag(false);
+					ttap.setAlgChangeFlag(false);
+					algCount += 1;
+				}else if(ttap.isAlgChangeFlag()){
+					StringBuffer sb2 = new StringBuffer();
+					sb2.append("update tb_current_analog set signalValue = '");
+					sb2.append(ttap.getAlgValue());sb2.append("', uploadDateTime = '");
+					sb2.append(sdfStand.format(ttap.getAnalogUploadTime()));sb2.append("' where deviceId = '");
+					sb2.append(deviceId); sb2.append("' and signalName = '"); sb2.append(ttap.getAnalogSignalId());
+					sb2.append("'");
+					ttap.setAlgChangeFlag(false);
+					Statement oldStat = con.createStatement();
+					oldStat.executeUpdate(sb2.toString());
+					oldStat.close();
+				}
+			}
+			//alg
+			if(algCount > 0){
+				int index1 = sbAlg.indexOf("values,(");
+				String sql = sbAlg.replace(index1, index1 + 8, "values(").toString();
+				//System.out.println(sql);
+				statNew = con.createStatement();
+				statNew.executeUpdate(sql);
+				statNew.close();
+			}
+//			//do
+//			if(doCount > 0){
+////				System.out.println(sbDo);
+//				int index1 = sbDo.indexOf("values,(");
+//				String sql = sbDo.replace(index1, index1 + 8, "values(").toString();
+////				System.out.println(sql);
+//				statNew = con.createStatement();
+//				statNew.executeUpdate(sql);
+//				statNew.close();
+//			}
+			//di
+			if(swhCount > 0){
+				int index1 = sbSwh.indexOf("values,(");
+				String sql = sbSwh.replace(index1, index1 + 8, "values(").toString();
+//				System.out.println(sql);
+				statNew = con.createStatement();
+				statNew.executeUpdate(sql);
+				statNew.close();
+			}
+			//alarm
+			if(newCount > 0){
+//				System.out.println(sb1.toString());
+				int index1 = sb1.indexOf("values,(");
+				String sql = sb1.replace(index1, index1 + 8, "values(").toString();
+//				System.out.println(sql);
+				statNew = con.createStatement();
+				statNew.executeUpdate(sql);
+				statNew.close();
+			}
+			con.close();
+		}catch(Exception e){
+			e.printStackTrace();
+		}finally{
+			try {
+				if(statNew != null){
+					statNew.close();
+				}
+				if(con != null){
+					con.close();
+				}
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	//开关量推送
+	private void switchUploadOperate(String deviceId, TheTimlyAlarmPojo ttap) {
+		// TODO Auto-generated method stub
+		Upload ul = new Upload();
+		ul.setFrameTime(sdfStand.format(new Date()));
+		ul.setInfoCount("0#1#0#0");
+		ul.setPlatformID("xxxxxxxx");
+		ul.setDeviceID(deviceId);
+		ul.setFrameType("data");
+		String SwitchState = String.valueOf(ttap.getSwhStatus());
+		Di[] dis = new Di[1];
+		Di di = new Di();
+		di.setInfoID(ttap.getSwitchSignalId());
+		di.setSwitchState(SwitchState);
+//		alarm.setTime(sdfStand.format(new Date()));
+		dis[0] = di;
+		
+		ul.setDI(dis);
+		//加入缓存
+		switch(ContainerUtil.getUploadFlag()){
+			case 1:
+				up1.add(ul);
+				break;
+			case 2:
+				up2.add(ul);
+				break;
+					
+		}
+	}
+}

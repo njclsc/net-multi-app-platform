@@ -1,0 +1,12 @@
+package bd.nmam.history.business.service;
+
+import java.awt.image.BufferedImage;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.web.multipart.MultipartFile;
+
+public interface IStaticSourceManagerService {
+
+	public String uploadOperate(MultipartFile file, HttpServletRequest request);
+}

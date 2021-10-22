@@ -1,0 +1,146 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.DeviceInfoPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianDevInfoOperateThread implements Runnable{
+	private long rate;
+	private DataSource ds;
+	private ReentrantLock reentrantLock;
+	private HashMap<String, DevicePojo> devices;
+	private String type;
+
+	// private Connection con;
+	// private Statement stat;
+	public BeidianDevInfoOperateThread(long rate, String type) {
+		this.rate = rate;
+		this.ds = DatabaseUtil.getDataSource();
+		this.reentrantLock = ContainerUtil.getReentrantLock();
+		this.devices = ContainerUtil.getDevices();
+		this.type = type;
+	}
+
+	public void run() {
+		while (true) {
+
+			Connection con = null;
+			Statement stat = null;
+			try {
+				Iterator<Map.Entry<String, DevicePojo>> itr = null;
+				synchronized (reentrantLock) {
+					itr = devices.entrySet().iterator();
+				
+				con = ds.getConnection();
+				while (itr.hasNext()) {
+					StringBuffer sql = new StringBuffer();
+					DevicePojo dp = itr.next().getValue();
+					String deviceId = dp.getDeviceId();
+					int devInfoFlag = dp.getDeviceInfoFlag();
+					DeviceInfoPojo dip = dp.getDip();
+					if (devInfoFlag == 1) {
+						if (type.equalsIgnoreCase("2")) {
+							sql.append("update tb_aed_outdevice set ");
+							sql.append("softVer = '");
+							sql.append(dip.getSoftVer());
+							sql.append("', ");
+							sql.append("protocolVer = '");
+							sql.append(dip.getProtocolVer());
+							sql.append("', ");
+							sql.append("hardwareVer = '");
+							sql.append(dip.getHardwareVer());
+							sql.append("', ");
+							sql.append("IMEI = '");
+							sql.append(dip.getIMEI());
+							sql.append("', ");
+							sql.append("SIM = '");
+							sql.append(dip.getSIM());
+							sql.append("', ");
+							sql.append("LAC = '");
+							sql.append(dip.getLAC());
+							sql.append("', ");
+							sql.append("CELLID = '");
+							sql.append(dip.getCELLID());
+							sql.append("', ");
+							sql.append("PCI = '");
+							sql.append(dip.getPCI());
+							sql.append("' where deviceId = '");
+							sql.append(deviceId);
+							sql.append("'");
+							// System.out.println(sql);
+							dp.setDeviceInfoFlag(0);
+						} else {
+							sql.append("update tb_device set ");
+							sql.append("softVer = '");
+							sql.append(dip.getSoftVer());
+							sql.append("', ");
+							sql.append("protocolVer = '");
+							sql.append(dip.getProtocolVer());
+							sql.append("', ");
+							sql.append("hardwareVer = '");
+							sql.append(dip.getHardwareVer());
+							sql.append("', ");
+							sql.append("IMEI = '");
+							sql.append(dip.getIMEI());
+							sql.append("', ");
+							sql.append("SIM = '");
+							sql.append(dip.getSIM());
+							sql.append("', ");
+							sql.append("LAC = '");
+							sql.append(dip.getLAC());
+							sql.append("', ");
+							sql.append("CELLID = '");
+							sql.append(dip.getCELLID());
+							sql.append("', ");
+							sql.append("PCI = '");
+							sql.append(dip.getPCI());
+							sql.append("' where deviceId = '");
+							sql.append(deviceId);
+							sql.append("'");
+							// System.out.println(sql);
+							dp.setDeviceInfoFlag(0);
+						}
+//						System.out.println(sql.toString());
+						stat = con.createStatement();
+						stat.executeUpdate(sql.toString());
+						stat.close();
+						
+						System.out.println("设备信息保存完毕....");
+					}
+				}
+				con.close();
+				}
+				Thread.sleep(rate);
+			} catch (Exception e) {
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			} finally {
+				try {
+					if (stat != null) {
+						stat.close();
+					}
+					if (con != null) {
+						con.close();
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+
+		}
+	}
+}

@@ -1,0 +1,150 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.AnalogPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianAnalogOperateThread implements Runnable{
+	private HashMap<String, DevicePojo> devices;
+	private long rate;
+	private String insert1 = "insert into analog_";
+	private String insert2 = "(deviceId, signalName, signalValue, uploadDateTime) values";
+	private String tmpBegin1 = ",('";
+	private String tmpMidd = "', '";
+	private String tmpEnd = "')";
+	private SimpleDateFormat sdfTable;
+	private SimpleDateFormat sdfStand;
+	private DataSource dataSource;
+	private ReentrantLock reentrantLock;
+	public BeidianAnalogOperateThread(long rate){
+		this.devices = ContainerUtil.getDevices();
+		this.rate = rate;
+		this.sdfStand = ContainerUtil.getSdfStand();
+		this.sdfTable = ContainerUtil.getSdfTable();
+		this.dataSource = DatabaseUtil.getDataSource();
+		this.reentrantLock = ContainerUtil.getReentrantLock();
+	}
+	public void run(){
+		while(true){
+			Connection con = null;
+			Statement stat = null;
+			try{
+				Iterator<Map.Entry<String, DevicePojo>> itr = null;
+				synchronized(reentrantLock){
+					itr = devices.entrySet().iterator();
+//				}
+				StringBuffer sql = new StringBuffer();
+				int ixFlag = 0;
+				long currentTime = System.currentTimeMillis();
+				while(itr.hasNext()){
+					DevicePojo dp = itr.next().getValue();
+//					dp.setRefreshTime(currentTime);
+					switch(dp.getAnalogFlag()){
+					case 1:
+						 List<AnalogPojo> analog2 = dp.getAnalog2();
+						 ixFlag += saveAnalog(dp.getDeviceId(), analog2, sql);
+						 analog2.clear();
+						 dp.setAnalogFlag(2);
+						break;
+					case 2:
+						 List<AnalogPojo> analog1 = dp.getAnalog1();
+						 ixFlag += saveAnalog(dp.getDeviceId(), analog1, sql);
+						 analog1.clear();
+						 dp.setAnalogFlag(1);
+						break;
+					}
+					
+
+				}
+				if(ixFlag > 0){
+					sql.replace(0, 1, "");
+					sql.insert(0, insert2);
+					sql.insert(0, sdfTable.format(new Date()));
+					sql.insert(0, insert1);
+					con = dataSource.getConnection();
+					stat = con.createStatement();
+					createTableForAlalog(con);
+					stat.executeUpdate(sql.toString());
+					System.out.println("模拟量保存完毕....");
+				}
+				
+				
+			}
+				
+				
+				Thread.sleep(rate);
+			}catch(Exception e){
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			}finally{
+				try{
+				if(stat != null){
+					stat.close();
+				}
+				if(con != null){
+					con.close();
+				}
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	private int saveAnalog(String deviceId, List<AnalogPojo> list, StringBuffer sql){
+		try{
+			int ix = 0;
+			for(AnalogPojo ap : list){
+				sql.append(tmpBegin1);
+				sql.append(deviceId);
+				sql.append(tmpMidd);
+				sql.append(ap.getSignalId());
+				sql.append(tmpMidd);
+				sql.append(ap.getSignalValue());
+				sql.append(tmpMidd);
+				sql.append(ContainerUtil.getSdfStand().format(ap.getUploadTime()));
+				sql.append(tmpEnd);
+				ix += 1;
+			}
+			return ix;
+		}catch(Exception e){
+			e.printStackTrace();
+			return 0;
+		}
+	}
+	//创建模拟量表
+	public void createTableForAlalog(Connection con) throws SQLException{
+		StringBuffer sb = new StringBuffer();
+		sb.append("create table if not exists analog_");
+		sb.append(sdfTable.format(new Date()));
+		sb.append("(id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',");
+		sb.append("deviceId VARCHAR(30) DEFAULT NULL COMMENT '设备ID[index]',");
+		sb.append("signalName VARCHAR(100) DEFAULT NULL COMMENT '信号名称',");
+		sb.append("signalValue VARCHAR(50) DEFAULT NULL COMMENT '信号模拟量',");
+		sb.append("uploadDateTime VARCHAR(30) DEFAULT NULL COMMENT '上报时间',");
+		sb.append("PRIMARY KEY (id), KEY index_device (deviceId)) ENGINE=MYISAM DEFAULT CHARSET=utf8");
+//		Connection con = dataSource.getConnection();
+		Statement stat = con.createStatement();
+		//Statement stat = dataSource.getConnection().createStatement();
+		stat.executeUpdate(sb.toString());
+		stat.close();
+//		con.close();
+	}
+}

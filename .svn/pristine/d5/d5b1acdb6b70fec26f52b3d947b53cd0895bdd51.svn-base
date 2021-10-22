@@ -1,0 +1,19 @@
+package bd.nmam.collection.config.channelinitializer;
+
+import org.springframework.stereotype.Component;
+
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.socket.DatagramChannel;
+import bd.nmam.collection.business.handler.TestHandler;
+import bd.nmam.collection.business.handler.TestHandler1;
+import bd.nmam.collection.business.handler.UT2;
+
+public class UDPChnnelinitializer extends ChannelInitializer<DatagramChannel>{
+
+	@Override
+	protected void initChannel(DatagramChannel arg0) throws Exception {
+		// TODO Auto-generated method stub
+		arg0.pipeline().addLast(new UT2());
+	}
+
+}

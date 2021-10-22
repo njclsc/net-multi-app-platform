@@ -1,0 +1,435 @@
+package bd.nmam.collection.business.handler.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
+import java.net.InetSocketAddress;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.protocol.HTTP;
+
+import bd.nmam.collection.business.pojo.beidian.AIPojo;
+import bd.nmam.collection.business.pojo.beidian.ConfigAIUpload;
+import bd.nmam.collection.business.pojo.beidian.ConfigDIUpload;
+import bd.nmam.collection.business.pojo.beidian.DIPojo;
+import bd.nmam.collection.business.pojo.beidian.DeviceCommandPojo;
+import bd.nmam.collection.business.pojo.beidian.ParamPojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.socket.DatagramPacket;
+import net.sf.json.JSONObject;
+
+public class BeidianUDPParamResponseHandler extends ChannelInboundHandlerAdapter{
+	private final String TYPE_RESPONSE_PARAMETER = "8E";
+	private final String TYPE_RESPONSE_PARAMETER_SET = "8D";
+	private String data;
+	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	private String deviceId;
+	private String SEQ;
+	private HashMap<String,ParamPojo> timlyParamBuf;
+
+	@Override
+	public void channelRead(ChannelHandlerContext ctx, Object msg)
+			throws Exception {
+		// TODO Auto-generated method stub
+		// super.channelRead(ctx, msg);
+		data = (String) msg;
+		Logger.getLogger("r3").info(data);
+		String[] datas = data.split("####");
+		switch (datas[1].substring(8, 10)) {
+		case TYPE_RESPONSE_PARAMETER:
+			System.out.println("参数获取返回" + data);
+			operate(datas[1]);
+			String[] addr = datas[0].split(":");
+			ByteBuf deviceResponse = Unpooled.copiedBuffer(ContainerUtil
+					.report(datas[1]));
+			DatagramPacket dp = new DatagramPacket(deviceResponse,
+					new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+			// ctx.writeAndFlush(dp);
+			// System.out.println("报警" + data);
+			// new BeidianAlarm2WebThread(data).start();
+			Thread.sleep(1000);
+			//缓存指令下发
+			deviceId = datas[1].substring(16, 32);
+			SEQ = datas[1].substring(datas[1].length()-10, datas[1].length()-6);
+			DeviceCommandPojo dcp = ContainerUtil.getDeviceCommBuf().get(deviceId);
+			if(dcp!=null){
+			dcp.setAddress(addr[0]);
+			dcp.setPort(addr[1]);
+			//==================================================
+			List<String> index = dcp.get_INDEX();
+			List<String> cmd = dcp.get_CMD();
+			for(int i = 0; i < index.size(); i++){
+				String[] _index = index.get(i).split("#");
+//				if(_index[2].equals("0") && !_index[3].equals(_index[0])){
+//					System.out.println("send 6");
+//					byte[] data1 = ContainerUtil.message2Bytes(cmd.get(i));
+//					ByteBuf deviceCMD = Unpooled.copiedBuffer(data1);
+//					DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+//							new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+//					ctx.writeAndFlush(dpCMD);
+//					index.set(i, _index[0] + "#" + (Integer.parseInt(_index[1]) + 1) + "#" + _index[2] + "#" + _index[3]);
+//				}
+				if(SEQ.equals(_index[0])){
+					index.set(i, _index[0] + "#" + _index[1] + "#" + (Integer.parseInt(_index[2]) + 1) + "#" + SEQ);
+				}
+			}
+			for(int i = 0; i < index.size(); i++){
+				String[] _index = index.get(i).split("#");
+				if(_index[2].equals("0") && !_index[3].equals(_index[0])){
+					System.out.println("send 6");
+					byte[] data1 = ContainerUtil.message2Bytes(cmd.get(i));
+					ByteBuf deviceCMD = Unpooled.copiedBuffer(data1);
+					DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+							new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+					ctx.writeAndFlush(dpCMD);
+					index.set(i, _index[0] + "#" + (Integer.parseInt(_index[1]) + 1) + "#" + _index[2] + "#" + _index[3]);
+					break;//设备端接收能力有限，发送一帧缓存指令后，中断发送循环
+				}
+			}
+			//==================================================
+//			String CMD = dcp.getCMD();
+//			String CMDSEQ = CMD.substring(CMD.length()-10, CMD.length()-6);
+//			if(SEQ.equalsIgnoreCase(CMDSEQ)){
+//				dcp.setIssueFlag(0);
+//			}
+//			if(dcp!=null && dcp.getCMD()!=null && dcp.getIssueFlag()==1){
+//				
+//				byte[] cmd = ContainerUtil.message2Bytes(CMD);
+//				ByteBuf deviceCMD = Unpooled.copiedBuffer(cmd);
+//				DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+//					new InetSocketAddress(addr[0], Integer.parseInt(addr[1])));
+//				ctx.writeAndFlush(dpCMD);
+//			}
+			}
+			break;
+		case TYPE_RESPONSE_PARAMETER_SET:
+			System.out.println("参数设置返回" + data);
+			String[] addr1 = datas[0].split(":");
+			if(data.substring(14, 16).equals("11")){
+				operate(datas[1]);
+				
+				ByteBuf deviceResponse1 = Unpooled.copiedBuffer(ContainerUtil
+						.report(datas[1]));
+				DatagramPacket dp1 = new DatagramPacket(deviceResponse1,
+						new InetSocketAddress(addr1[0], Integer.parseInt(addr1[1])));
+				Thread.sleep(1000);
+				//缓存指令下发
+				deviceId = datas[1].substring(16, 32);
+				SEQ = datas[1].substring(datas[1].length()-10, datas[1].length()-6);
+				DeviceCommandPojo dcp1 = ContainerUtil.getDeviceCommBuf().get(deviceId);
+				if(dcp1!=null){
+				dcp1.setAddress(addr1[0]);
+				dcp1.setPort(addr1[1]);
+				//==================================================
+				List<String> index1 = dcp1.get_INDEX();
+				List<String> cmd1 = dcp1.get_CMD();
+				for(int i = 0; i < index1.size(); i++){
+					String[] _index = index1.get(i).split("#");
+					if(SEQ.equals(_index[0])){
+						index1.set(i, _index[0] + "#" + _index[1] + "#" + (Integer.parseInt(_index[2]) + 1) + "#" + SEQ);
+					}
+				}
+				for(int i = 0; i < index1.size(); i++){
+					String[] _index = index1.get(i).split("#");
+					if(_index[2].equals("0") && !_index[3].equals(_index[0])){
+						System.out.println("send 6");
+						byte[] data1 = ContainerUtil.message2Bytes(cmd1.get(i));
+						ByteBuf deviceCMD = Unpooled.copiedBuffer(data1);
+						DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+								new InetSocketAddress(addr1[0], Integer.parseInt(addr1[1])));
+						ctx.writeAndFlush(dpCMD);
+						index1.set(i, _index[0] + "#" + (Integer.parseInt(_index[1]) + 1) + "#" + _index[2] + "#" + _index[3]);
+						break;//设备端接收能力有限，发送一帧缓存指令后，中断发送循环
+					}
+				}
+				}
+			}else{
+				deviceId = datas[1].substring(16, 32);
+				SEQ = datas[1].substring(datas[1].length()-10, datas[1].length()-6);
+				DeviceCommandPojo dcp1 = ContainerUtil.getDeviceCommBuf().get(deviceId);
+				if(dcp1!=null){
+				dcp1.setAddress(addr1[0]);
+				dcp1.setPort(addr1[1]);
+				//==================================================
+				List<String> index1 = dcp1.get_INDEX();
+				List<String> cmd1 = dcp1.get_CMD();
+				for(int i = 0; i < index1.size(); i++){
+					String[] _index = index1.get(i).split("#");
+					if(SEQ.equals(_index[0])){
+						index1.set(i, _index[0] + "#" + _index[1] + "#" + (Integer.parseInt(_index[2]) + 1) + "#" + SEQ);
+					}
+				}
+				for(int i = 0; i < index1.size(); i++){
+					String[] _index = index1.get(i).split("#");
+					if(_index[2].equals("0") && !_index[3].equals(_index[0])){
+						System.out.println("send 6");
+						byte[] data1 = ContainerUtil.message2Bytes(cmd1.get(i));
+						ByteBuf deviceCMD = Unpooled.copiedBuffer(data1);
+						DatagramPacket dpCMD = new DatagramPacket(deviceCMD,
+								new InetSocketAddress(addr1[0], Integer.parseInt(addr1[1])));
+						ctx.writeAndFlush(dpCMD);
+						index1.set(i, _index[0] + "#" + (Integer.parseInt(_index[1]) + 1) + "#" + _index[2] + "#" + _index[3]);
+						break;//设备端接收能力有限，发送一帧缓存指令后，中断发送循环
+					}
+				}
+			}
+			}
+			break;
+		default:
+			ctx.fireChannelRead(msg);
+			break;
+		}
+	}
+
+	@Override
+	public void channelActive(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+		// super.channelActive(ctx);
+		// ContainerUtil.getTcpClientFuture().put(
+		// ctx.channel().remoteAddress().toString().substring(1),
+		// ctx.channel());
+		this.timlyParamBuf = ContainerUtil.getTimlyParamBuf();
+		ctx.fireChannelActive();
+	}
+
+	@Override
+	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+		// super.channelReadComplete(ctx);
+	}
+
+	@Override
+	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+			throws Exception {
+		// TODO Auto-generated method stub
+		// super.exceptionCaught(ctx, cause);
+		cause.printStackTrace();
+		StringWriter sw = new StringWriter();
+		cause.printStackTrace(new PrintWriter(sw));
+		ContainerUtil.getLoggerWrite().error(sw.toString());
+	}
+
+	private void operate(String data) throws UnsupportedEncodingException {
+		String deviceId = data.substring(16, 32);
+		String chNum = data.substring(38, 40);
+		int tdh = hexStringToAlgorism(chNum);
+		String Channel = String.valueOf(tdh);
+		if (ContainerUtil.checkSUM(data)) {
+			HashMap<String, Object> hs = configDataAnalysis(data);
+			//通道参数缓存 
+			String key = deviceId + "#" + Channel;
+			ParamPojo pp = timlyParamBuf.get(key);
+			if(pp==null){
+				pp = new ParamPojo();
+				pp.setDeviceId(deviceId);
+				pp.setChannel(Channel);
+				pp.setParam((String)hs.get("Param"));
+				pp.setUploadTime(System.currentTimeMillis());
+				pp.setChangeFlag(true);
+				pp.setNewFlag(true);
+				timlyParamBuf.put(key, pp);
+			}else {
+				pp.setParam((String)hs.get("Param"));
+//				pp.setAlarmStatus(ap.getAlarmStatus());
+				pp.setChangeFlag(true);
+				pp.setUploadTime(System.currentTimeMillis());
+			}
+			// 数据拼接开始
+			try {
+				if (hs.containsKey("AIConfig")) {
+					ConfigAIUpload ul = new ConfigAIUpload();
+					ul.setFrameTime((String) hs.get("FrameTime"));
+					ul.setInfoCount((String) hs.get("InfoCount"));
+					ul.setPlatformID((String) hs.get("PlatformID"));
+					ul.setDeviceID((String) hs.get("DeviceID"));
+					ul.setFrameType((String) hs.get("FrameType"));
+					ul.setAIConfig((AIPojo) hs.get("AIConfig"));
+					// ul.setAlarm(null);
+					JSONObject obj = JSONObject.fromObject(ul);
+					HttpPost httpPost = new HttpPost(
+							ContainerUtil.getResponseUrl());
+					httpPost.addHeader(HTTP.CONTENT_TYPE, "application/json");
+					httpPost.addHeader(HTTP.CONTENT_TYPE, "application/json");
+					StringEntity se = new StringEntity(obj.toString());
+					httpPost.setEntity(se);
+					CloseableHttpResponse rv = ContainerUtil.getHttpClient()
+							.execute(httpPost);
+					rv.close();
+				} else if (hs.containsKey("DIConfig")) {
+					ConfigDIUpload ul = new ConfigDIUpload();
+					ul.setFrameTime((String) hs.get("FrameTime"));
+					ul.setInfoCount((String) hs.get("InfoCount"));
+					ul.setPlatformID((String) hs.get("PlatformID"));
+					ul.setDeviceID((String) hs.get("DeviceID"));
+					ul.setFrameType((String) hs.get("FrameType"));
+					ul.setDIConfig((DIPojo) hs.get("DIConfig"));
+					// ul.setAlarm(null);
+					JSONObject obj = JSONObject.fromObject(ul);
+					HttpPost httpPost = new HttpPost(
+							ContainerUtil.getResponseUrl());
+					httpPost.addHeader(HTTP.CONTENT_TYPE, "application/json");
+					httpPost.addHeader(HTTP.CONTENT_TYPE, "application/json");
+					StringEntity se = new StringEntity(obj.toString());
+					httpPost.setEntity(se);
+					CloseableHttpResponse rv = ContainerUtil.getHttpClient()
+							.execute(httpPost);
+					rv.close();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		} else {
+			System.out.println(deviceId + "设备参数返回指令校验失败");
+		}
+	}
+
+	private HashMap<String, Object> configDataAnalysis(String reciveData) {
+		// TODO Auto-generated method stub
+		// 7e 10 01 50 8e f0 4d 01 00 01 50 18 05 21 00 56 00 00 00 11 41 11 01
+		// 00 00 00 00 00 00 00 20 c1 00 00 00 00 00 00 c8 42 00 00 70 42 00 00
+		// a0 c0 00 00 a0 40 00 00 00 40 00 00 00 00 50 10 01 70 50 03 01 71 50
+		// 03 01 72 50 02 01 73 50 04 01 74 01 01 01 01 00 00 f3 7e 0d
+		HashMap<String, Object> hs = new HashMap<String, Object>();
+		String DeviceID = reciveData.substring(16, 32);
+		String chNum = reciveData.substring(38, 40);
+		int tdh = hexStringToAlgorism(chNum);
+		if (tdh >= 17 && tdh <= 48) {
+			String[] AI1 = new String[2];
+			int j = 44;
+			for (int i = 0; i < 2; i++) {
+				AI1[i] = reciveData.substring(j, j + 2);
+				j = j + 2;
+			}
+			String[] AI2 = new String[14];
+			for (int i = 0; i < 14; i++) {
+				AI2[i] = reciveData.substring(j, j + 8);
+				j = j + 8;
+			}
+			String[] AI3 = new String[4];
+			for (int i = 0; i < 4; i++) {
+				AI3[i] = reciveData.substring(j, j + 2);
+				j = j + 2;
+			}
+			AI2[0] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[0])));
+			AI2[1] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[1])));
+			AI2[2] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[2])));
+			AI2[3] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[3])));
+			AI2[4] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[4])));
+			AI2[5] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[5])));
+			AI2[6] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[6])));
+			AI2[7] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[7])));
+			AI2[8] = String.valueOf(getFloat(ContainerUtil.hexStrToBytes(AI2[8])));
+			AIPojo aipj = new AIPojo();
+			aipj.setChNum(String.valueOf(tdh));
+			aipj.setChSta(AI1[0]);
+			aipj.setChAttr(AI1[1]);
+			aipj.setSvOne(AI2[0]);
+			aipj.setAcOne(AI2[1]);
+			aipj.setSvTwo(AI2[2]);
+			aipj.setAcTwo(AI2[3]);
+			aipj.setAlmUpLim(AI2[4]);
+			aipj.setAlmDnLim(AI2[5]);
+			aipj.setAlmRtn(AI2[6]);
+			aipj.setJumpParm(AI2[7]);
+			aipj.setCalParm(AI2[8]);
+			aipj.setDataID(AI2[9]);
+			aipj.setUpLimID(AI2[10]);
+			aipj.setDnLimID(AI2[11]);
+			aipj.setFaultID(AI2[12]);
+			aipj.setJumpID(AI2[13]);
+			aipj.setUpLimMask(AI3[0]);
+			aipj.setDnLimMask(AI3[1]);
+			aipj.setFaultMask(AI3[2]);
+			aipj.setJumpMask(AI3[3]);
+			
+			String param = String.valueOf(tdh)+"_"+AI1[0]+"_"+AI1[1]+"_"+AI2[0]+"_"+AI2[1]+"_"+AI2[2]+"_"+AI2[3]+"_"+AI2[4]+"_"+AI2[5]+"_"+AI2[6]+"_"+AI2[7]+"_"+AI2[8]+"_"+AI2[9]+"_"+AI2[10]+"_"+AI2[11]+"_"+AI2[12]+"_"+AI2[13]+"_"+AI3[0]+"_"+AI3[1]+"_"+AI3[2]+"_"+AI3[3];
+
+			hs.put("PlatformID", "xxxxxxxx");
+			hs.put("DeviceID", DeviceID);
+			hs.put("InfoCount", "1");
+			hs.put("FrameType", "ConfigData");
+			hs.put("FrameTime", sdf.format(new Date()));
+			hs.put("AIConfig", aipj);
+			
+			hs.put("Param", param);
+
+			return hs;
+		} else if (tdh >= 49 && tdh <= 81) {
+			// 7e 10 01 50 8e 20 1d 01 00 01 50 18 05 21 00 56 00 00 00 31 30 31
+			// 01 01 50 10 04 90 50 02 04 90 00 00 00 00 00 00 fb 80 0d
+			String[] DI1 = new String[2];
+			int j = 44;
+			for (int i = 0; i < 2; i++) {
+				DI1[i] = reciveData.substring(j, j + 2);
+				j = j + 2;
+			}
+			String[] DI2 = new String[2];
+			for (int i = 0; i < 2; i++) {
+				DI2[i] = reciveData.substring(j, j + 8);
+				j = j + 8;
+			}
+			DIPojo dipj = new DIPojo();
+			dipj.setChNum(String.valueOf(tdh));
+			dipj.setChSta(DI1[0]);
+			dipj.setChAttr(DI1[1]);
+			dipj.setDataID(DI2[0]);
+			dipj.setAlarmID(DI2[1]);
+			
+			String param = String.valueOf(tdh)+"_"+DI1[0]+"_"+DI1[1]+"_"+DI2[0]+"_"+DI2[1];
+
+			hs.put("PlatformID", "xxxxxxxx");
+			hs.put("DeviceID", DeviceID);
+			hs.put("InfoCount", "1");
+			hs.put("FrameType", "ConfigData");
+			hs.put("FrameTime", sdf.format(new Date()));
+			hs.put("DIConfig", dipj);
+			hs.put("Param", param);
+
+			return hs;
+		}
+		return null;
+	}
+
+	// 浮点数转换 更改为小端处理方式（低字节在前） by seifer 171213
+	public static float getFloat(byte[] b) {
+		int l;
+		l = b[0];
+		l &= 0xff;
+		l |= ((long) b[1] << 8);
+		l &= 0xffff;
+		l |= ((long) b[2] << 16);
+		l &= 0xffffff;
+		l |= ((long) b[3] << 24);
+
+		return Float.intBitsToFloat(l);
+
+	}
+
+	/** 16进制字符串转为10进制int */
+	public static int hexStringToAlgorism(String hex) {
+		hex = hex.toUpperCase();
+		int max = hex.length();
+		int result = 0;
+		for (int i = max; i > 0; i--) {
+			char c = hex.charAt(i - 1);
+			int algorism = 0;
+			if (c >= '0' && c <= '9') {
+				algorism = c - '0';
+			} else {
+				algorism = c - 55;
+			}
+			result += Math.pow(16, max - i) * algorism;
+		}
+		return result;
+	}
+}

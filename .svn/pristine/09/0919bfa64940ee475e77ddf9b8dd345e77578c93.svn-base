@@ -1,0 +1,27 @@
+server:
+  port: 9110
+  servlet:
+    context-path: /history
+
+spring:
+  application:
+    name: history
+  profiles:
+    active: dev
+
+  cloud:
+    nacos: 
+      discovery:
+        namespace: a6524a2d-5dc3-416f-9a9c-af9880bfb11f
+        server-addr: 192.168.3.99:7777
+      config:
+        namespace: a6524a2d-5dc3-416f-9a9c-af9880bfb11f
+        server-addr: 192.168.3.99:7777
+        file-extension: yaml
+        shared-dataids: datasource-dev.yaml,redisource-dev.yaml,ms-login-dev.yaml
+        refreshable-dataids: datasource-dev.yaml,redisource-dev.yaml,ms-login-dev.yaml
+
+mybatis:
+  mapper-locations:
+    - classpath:bd/nmam/manager/business/**/*.xml
+    

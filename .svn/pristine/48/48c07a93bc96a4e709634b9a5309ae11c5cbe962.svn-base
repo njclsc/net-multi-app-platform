@@ -1,0 +1,14 @@
+
+#file-loginModular
+log4j.logger.loginModular = error, loginModular
+log4j.additivity.loginModular = false
+log4j.appender.loginModular = org.apache.log4j.RollingFileAppender
+log4j.appender.loginModular.File = D\:\\logCollect/loginModular.log
+log4j.appender.loginModular.MaxFileSize = 2048KB
+log4j.appender.loginModular.MaxBackupIndex = 500
+log4j.appender.loginModular.Append = true  
+log4j.appender.loginModular.Threshold = info   
+log4j.appender.loginModular.layout = org.apache.log4j.PatternLayout  
+log4j.appender.loginModular.layout.ConversionPattern = %d{yyyy-MM-dd HH\:mm\:ss}  [ %t\:%r ] - [ %p ]  %m%n 
+
+

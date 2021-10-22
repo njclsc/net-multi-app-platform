@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.manager.business.dao.AreaManagerDao">
+	<insert id="add" parameterType = "bd.nmam.manager.business.pojo.AreaPojo">
+		insert into tb_area(areaName, districtId, areaLevel, parentAreaId, areaCode, address, removeFlag, lon, lat, imageUrl) 
+		values(#{areaName}, ${districtId}, ${areaLevel}, ${parentAreaId}, #{areaCode}, #{address}, ${removeFlag}, #{lon}, #{lat}, #{imgUrl})
+	</insert>
+	<delete id="remove" parameterType = "bd.nmam.manager.business.pojo.AreaPojo">
+		delete from tb_area where id = ${id}
+	</delete>
+	<update id="modify" parameterType = "bd.nmam.manager.business.pojo.AreaPojo">
+		update tb_area set areaName = #{areaName}, districtId= ${districtId}, 
+		areaLevel = ${areaLevel}, parentAreaId = ${parentAreaId}, areaCode = #{areaCode}, 
+		address = #{address}, removeFlag = ${removeFlag}, lon = #{lon}, lat = #{lat}, imageUrl = #{imgUrl}  where id = ${id}
+	</update>
+	<select id="find" parameterType = "bd.nmam.manager.business.pojo.AreaPojo" resultType = "bd.nmam.manager.business.pojo.AreaPojo">
+		select tb_area.*, tb_level.levelName, t2.areaName as parentAreaName, tb_area.imageUrl as imgUrl
+		from tb_area 
+		left join tb_level on tb_area.areaLevel = tb_level.levelNumber
+		left join tb_area as t2 on t2.id = tb_area.parentAreaId
+		where 1 = 1
+		<if test="parentAreaId != null and parentAreaId != '' and parentAreaId != 0">
+			and tb_area.parentAreaId = ${parentAreaId}
+		</if>
+		limit ${beginRow}, ${rows}
+	</select>
+	<select id="findCount" parameterType = "bd.nmam.manager.business.pojo.AreaPojo" resultType = "Integer">
+		select count(*) from tb_area where 1 = 1
+		<if test="parentAreaId != null and parentAreaId != ''">
+			and parentAreaId = ${parentAreaId}
+		</if>
+	</select>
+	<select id="load" parameterType = "bd.nmam.manager.business.pojo.AreaPojo" resultType = "bd.nmam.manager.business.pojo.AreaPojo">
+		select tb_area.*, tb_level.levelName from tb_area 
+		left join tb_level on tb_area.areaLevel = tb_level.levelNumber
+		where 1 = 1
+		<if test="parentAreaId != null and parentAreaId != ''">
+			and parentAreaId = ${parentAreaId}
+		</if>
+		<if test="areaLevel != null or areaLevel != 0">
+			and areaLevel = ${areaLevel}
+		</if>
+	</select>
+	<select id="findLevel" parameterType = "bd.nmam.manager.business.pojo.AreaPojo" resultType = "bd.nmam.manager.business.pojo.AreaPojo">
+		select tb_area.*, tb_level.levelName from tb_area 
+		left join tb_level on tb_area.areaLevel = tb_level.levelNumber
+		group by tb_area.areaLevel
+	</select>
+</mapper>

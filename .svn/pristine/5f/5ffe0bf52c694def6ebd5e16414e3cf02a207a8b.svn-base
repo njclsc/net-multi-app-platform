@@ -1,0 +1,18 @@
+#--------------业务数据处理----------------------------
+business:
+  tcpServer: 
+    allKeys: jx_tcpserver
+    usedKey: jx_tcpserver
+  udp: 
+    allKeys: uset1, uset2
+    usedKey: uset2
+  http:
+    allKeys: jx_http
+    usedKey: jx_http
+#--------------线程池-----------------------------
+data: 
+  threadPool: 
+    corePoolSize: 50
+    maximumPoolSize: 250
+    keepAliveTim: 10000
+    

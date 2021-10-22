@@ -1,0 +1,36 @@
+package bd.nmam.manager.business.controller;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import bd.nmam.manager.business.pojo.UserPojo;
+import bd.nmam.manager.business.service.IUserManagerService;
+
+@RestController
+@RequestMapping("/user")
+public class UserManagerController {
+	@Autowired
+	@Qualifier("UserMangerServiceImp")
+	private IUserManagerService userManagerService;
+	@RequestMapping("add")
+	public String add(@RequestBody UserPojo user, HttpServletRequest request){
+		return userManagerService.add(user, request);
+	}
+	@RequestMapping("remove")
+	public String remove(@RequestBody UserPojo user){
+		return userManagerService.remove(user);
+	}
+	@RequestMapping("modify")
+	public String modify(@RequestBody UserPojo user, HttpServletRequest request){
+		return userManagerService.modify(user, request);
+	}
+	@RequestMapping("find")
+	public String find(@RequestBody UserPojo user){
+		return userManagerService.find(user);
+	}
+}

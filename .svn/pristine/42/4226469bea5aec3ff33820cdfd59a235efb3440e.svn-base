@@ -1,0 +1,669 @@
+/*
+SQLyog Ultimate v12.08 (64 bit)
+MySQL - 5.6.25-log : Database - firework_jx
+*********************************************************************
+*/
+
+/*!40101 SET NAMES utf8 */;
+
+/*!40101 SET SQL_MODE=''*/;
+
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+CREATE DATABASE /*!32312 IF NOT EXISTS*/`firework_jx` /*!40100 DEFAULT CHARACTER SET utf8 */;
+
+USE `firework_jx`;
+
+/*Table structure for table `alarmdictionaries` */
+
+DROP TABLE IF EXISTS `alarmdictionaries`;
+
+CREATE TABLE `alarmdictionaries` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `deviceType` varchar(100) DEFAULT NULL COMMENT '设备类型（0：摄像头）',
+  `signalID` varchar(12) DEFAULT NULL COMMENT '信号ID',
+  `signalName` varchar(100) DEFAULT NULL COMMENT '信号标准名',
+  `unit` varchar(10) DEFAULT NULL COMMENT '单位',
+  `logicClassification` varchar(100) DEFAULT NULL COMMENT '逻辑分类',
+  `displayState` tinyint(1) DEFAULT NULL COMMENT '显示状态[0=显示，1=不显示]',
+  `alarmInfo` varchar(50) DEFAULT NULL COMMENT '告警状态为1时 对告警的描述',
+  `dataInfo` varchar(50) DEFAULT NULL COMMENT '数据信息',
+  `alarmDelyed` int(11) DEFAULT NULL COMMENT '告警延时[秒]',
+  `signalSummary` varchar(100) DEFAULT NULL COMMENT '信号说明',
+  `signalExplain` varchar(100) DEFAULT NULL COMMENT '信号解释',
+  `remarks` varchar(100) DEFAULT NULL COMMENT '备注',
+  `alarmLV` varchar(100) DEFAULT NULL COMMENT '告警等级',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=866 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_accident_recode` */
+
+DROP TABLE IF EXISTS `tb_accident_recode`;
+
+CREATE TABLE `tb_accident_recode` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_name` varchar(100) DEFAULT NULL COMMENT '企业名称',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `occurrence_time` varchar(30) DEFAULT NULL COMMENT '发生时间',
+  `occurrence_place` varchar(100) DEFAULT NULL COMMENT '发生地点',
+  `person_count` varchar(10) DEFAULT NULL COMMENT '人员伤亡数量',
+  `economic_loss` varchar(20) DEFAULT NULL COMMENT '直接经济损失',
+  `info` varchar(500) DEFAULT NULL COMMENT '事故基本情况',
+  `direct_cause` varchar(300) DEFAULT NULL COMMENT '直接原因',
+  `indirect_cause` varchar(300) DEFAULT NULL COMMENT '间接原因',
+  `treatment` varchar(500) DEFAULT NULL COMMENT '应急处置过程',
+  `summary` varchar(500) DEFAULT NULL COMMENT '经验教训',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_acsdata` */
+
+DROP TABLE IF EXISTS `tb_acsdata`;
+
+CREATE TABLE `tb_acsdata` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `upload_time` varchar(30) DEFAULT NULL COMMENT '记录时间',
+  `name` varchar(10) DEFAULT NULL COMMENT '人员姓名',
+  `work_site` varchar(20) DEFAULT NULL COMMENT '工作场所',
+  `acs_code` varchar(20) DEFAULT NULL COMMENT '门禁设备编码',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_alarm_2021_09` */
+
+DROP TABLE IF EXISTS `tb_alarm_2021_09`;
+
+CREATE TABLE `tb_alarm_2021_09` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键序号',
+  `device_id` varchar(30) DEFAULT NULL COMMENT '主设备ID（tb_device表deviceId字段）',
+  `device_did` varchar(30) DEFAULT NULL COMMENT '摄像头IP地址或设备DID',
+  `device_type` varchar(20) DEFAULT NULL COMMENT '设备类型（摄像头：0；）',
+  `alarm_type` varchar(30) DEFAULT NULL COMMENT '告警类型',
+  `alarm_status` varchar(30) DEFAULT NULL COMMENT '告警状态',
+  `alarm_time` varchar(30) DEFAULT NULL COMMENT '告警时间',
+  `alarm_img` varchar(100) DEFAULT NULL COMMENT '摄像头设备告警时使用',
+  `alarm_lv` int(11) DEFAULT NULL COMMENT '告警等级',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_camera_device` */
+
+DROP TABLE IF EXISTS `tb_camera_device`;
+
+CREATE TABLE `tb_camera_device` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `cd_name` varchar(20) DEFAULT NULL COMMENT '摄像头名称',
+  `cd_code` varchar(20) DEFAULT NULL COMMENT '摄像头编码',
+  `install_add` varchar(50) DEFAULT NULL COMMENT '安装位置',
+  `alarm_state` varchar(10) DEFAULT NULL COMMENT '报警状态',
+  `alarm_time` varchar(30) DEFAULT NULL COMMENT '报警时间',
+  `alarm_recovery_time` varchar(30) DEFAULT NULL COMMENT '消警时间',
+  `alarm_duration` varchar(20) DEFAULT NULL COMMENT '报警持续时间',
+  `alarm_total_times` varchar(10) DEFAULT NULL COMMENT '报警累计次数',
+  `install_date` varchar(30) DEFAULT NULL COMMENT '传感器联网时间',
+  `state` varchar(10) DEFAULT NULL COMMENT '传感器联网状态',
+  `person_num` int(11) DEFAULT NULL COMMENT '人数阈值',
+  `bbox` varchar(50) DEFAULT NULL COMMENT '区域，图像左上顶点坐标，宽度，高度，逗号分隔，如:“12,34,73,90”,用于划分限高区域和阻塞区域',
+  `image_highlimit` varchar(200) DEFAULT NULL COMMENT '限高图片地址',
+  `image_block` varchar(200) DEFAULT NULL COMMENT '阻塞图片地址',
+  `ip_add` varchar(20) DEFAULT NULL COMMENT '摄像头IP地址',
+  `high_area` varchar(30) DEFAULT NULL COMMENT '限高区域',
+  `block_area` varchar(30) DEFAULT NULL COMMENT '阻塞区域',
+  `channel_num` varchar(11) DEFAULT NULL COMMENT '通道号',
+  `image_change` varchar(200) DEFAULT NULL COMMENT '状态改变图片地址',
+  `change_area` varchar(30) DEFAULT NULL COMMENT '状态改变区域',
+  `alarm_img` varchar(200) DEFAULT NULL COMMENT '报警图片',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_cooperation_unit` */
+
+DROP TABLE IF EXISTS `tb_cooperation_unit`;
+
+CREATE TABLE `tb_cooperation_unit` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `unit_name` varchar(50) DEFAULT NULL COMMENT '协作单位名称',
+  `qualification_level` varchar(20) DEFAULT NULL COMMENT '资质等级',
+  `cert_code` varchar(20) DEFAULT NULL COMMENT '资质证书编号',
+  `cert_expiry_date` varchar(30) DEFAULT NULL COMMENT '资质证书有效期',
+  `activity_date` varchar(30) DEFAULT NULL COMMENT '最近活动时间',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_current_alarm` */
+
+DROP TABLE IF EXISTS `tb_current_alarm`;
+
+CREATE TABLE `tb_current_alarm` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键序号',
+  `device_id` varchar(30) DEFAULT NULL COMMENT '主设备ID（tb_device表deviceId字段）',
+  `device_did` varchar(30) DEFAULT NULL COMMENT '摄像头IP地址或设备DID',
+  `device_type` varchar(20) DEFAULT NULL COMMENT '设备类型（摄像头：0；）',
+  `alarm_type` varchar(30) DEFAULT NULL COMMENT '告警类型',
+  `alarm_status` varchar(30) DEFAULT NULL COMMENT '告警状态',
+  `alarm_time` varchar(30) DEFAULT NULL COMMENT '告警时间',
+  `alarm_img` varchar(100) DEFAULT NULL COMMENT '摄像头设备告警时使用',
+  `alarm_lv` int(11) DEFAULT NULL COMMENT '告警等级',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=16 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_current_data` */
+
+DROP TABLE IF EXISTS `tb_current_data`;
+
+CREATE TABLE `tb_current_data` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键序号',
+  `device_id` varchar(30) DEFAULT NULL COMMENT '主设备ID（tb_device表deviceId字段）',
+  `device_did` varchar(30) DEFAULT NULL COMMENT '设备DID',
+  `device_type` varchar(20) DEFAULT NULL COMMENT '设备类型',
+  `data_model` varchar(20) DEFAULT NULL COMMENT '数据类别 AI，DI，DO',
+  `data_type` varchar(20) DEFAULT NULL COMMENT '数据类型',
+  `data_value` varchar(30) DEFAULT NULL COMMENT '数据值（0：开；1：关）',
+  `data_time` varchar(50) DEFAULT NULL COMMENT '数据上报时间',
+  `alarm_status` varchar(30) DEFAULT NULL COMMENT '告警状态',
+  `alarm_lv` varchar(30) DEFAULT NULL COMMENT '告警等级',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=14 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_danger_record` */
+
+DROP TABLE IF EXISTS `tb_danger_record`;
+
+CREATE TABLE `tb_danger_record` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `reporter` varchar(20) DEFAULT NULL COMMENT '隐患发现人',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `reporter_ep` varchar(50) DEFAULT NULL COMMENT '发现人单位',
+  `report_date` varchar(30) DEFAULT NULL COMMENT '发现时间',
+  `content` varchar(150) DEFAULT NULL COMMENT '隐患内容',
+  `level` varchar(10) DEFAULT NULL COMMENT '严重程度',
+  `measures` varchar(150) DEFAULT NULL COMMENT '整改措施',
+  `rectification_period` varchar(30) DEFAULT NULL COMMENT '整改期限',
+  `rectification_person` varchar(20) DEFAULT NULL COMMENT '整改负责人',
+  `rectification_state` varchar(10) DEFAULT NULL COMMENT '整改状态 0：未开始，1：进行中，2：整改完毕',
+  `rectification_date` varchar(30) DEFAULT NULL COMMENT '整改完成时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_data_2021_09` */
+
+DROP TABLE IF EXISTS `tb_data_2021_09`;
+
+CREATE TABLE `tb_data_2021_09` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键序号',
+  `device_id` varchar(30) DEFAULT NULL COMMENT '主设备ID（tb_device表deviceId字段）',
+  `device_did` varchar(30) DEFAULT NULL COMMENT '设备DID',
+  `device_type` varchar(20) DEFAULT NULL COMMENT '设备类型',
+  `data_model` varchar(20) DEFAULT NULL COMMENT '数据类别 AI，DI，DO',
+  `data_type` varchar(20) DEFAULT NULL COMMENT '数据类型',
+  `data_value` varchar(30) DEFAULT NULL COMMENT '数据值（0：开；1：关）',
+  `data_time` varchar(50) DEFAULT NULL COMMENT '数据上报时间',
+  `alarm_status` varchar(30) DEFAULT NULL COMMENT '告警状态',
+  `alarm_lv` varchar(30) DEFAULT NULL COMMENT '告警等级',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=10 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_device` */
+
+DROP TABLE IF EXISTS `tb_device`;
+
+CREATE TABLE `tb_device` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `dev_id` varchar(30) DEFAULT NULL,
+  `dev_local_ip` varchar(30) DEFAULT NULL,
+  `dev_local_port` int(11) DEFAULT NULL,
+  `dev_target_ip` varchar(30) DEFAULT NULL,
+  `dev_target_port` int(11) DEFAULT NULL,
+  `devType` int(11) DEFAULT NULL,
+  `parentId` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_device_type` */
+
+DROP TABLE IF EXISTS `tb_device_type`;
+
+CREATE TABLE `tb_device_type` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `typeName` varchar(30) DEFAULT NULL COMMENT '设备类型名称',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_enterprise` */
+
+DROP TABLE IF EXISTS `tb_enterprise`;
+
+CREATE TABLE `tb_enterprise` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_name` varchar(100) DEFAULT NULL COMMENT '企业名称',
+  `ep_short_name` varchar(50) DEFAULT NULL COMMENT '企业简称',
+  `parent_ep_name` varchar(100) DEFAULT NULL COMMENT '父级企业名称',
+  `parent_code` int(11) DEFAULT NULL COMMENT '所属行政区域',
+  `registry_add` varchar(150) DEFAULT NULL COMMENT '工商注册地址',
+  `worksite_add` varchar(150) DEFAULT NULL COMMENT '生产场所地址',
+  `lon` varchar(30) DEFAULT NULL COMMENT '经度',
+  `lat` varchar(30) DEFAULT NULL COMMENT '纬度',
+  `legal_person` varchar(20) DEFAULT NULL COMMENT '法人代表',
+  `safe_tel` varchar(20) DEFAULT NULL COMMENT '安全值班电话',
+  `postcode` varchar(20) DEFAULT NULL COMMENT '邮政编码',
+  `establish_date` varchar(30) DEFAULT NULL COMMENT '成立时间',
+  `operating_period` varchar(30) DEFAULT NULL COMMENT '经营期限',
+  `ep_scale` varchar(30) DEFAULT NULL COMMENT '企业规模',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `ep_type` varchar(10) DEFAULT NULL COMMENT '企业类型',
+  `economic_type` varchar(10) DEFAULT NULL COMMENT '经济类型',
+  `responsible_person` varchar(20) DEFAULT NULL COMMENT '企业负责人',
+  `social_credit_code` varchar(18) DEFAULT NULL COMMENT '统一社会信用代码',
+  `business_scope` varchar(200) DEFAULT NULL COMMENT '营业执照经营范围',
+  `safety_standard_grad` varchar(6) DEFAULT NULL COMMENT '安全生产标准化等级，1:一级;2:二级;3三级;',
+  `license_no` varchar(18) DEFAULT NULL COMMENT '许可证编号',
+  `license_limits` varchar(200) DEFAULT NULL COMMENT '许可证范围',
+  `license_expiry_date` varchar(30) DEFAULT NULL COMMENT '许可证有效期限',
+  `issuing_authority` varchar(100) DEFAULT NULL COMMENT '发证机关',
+  `issuing_date` varchar(30) DEFAULT NULL COMMENT '发证日期',
+  `people_employee` int(11) DEFAULT NULL COMMENT '职工人数',
+  `throughput` varchar(200) DEFAULT NULL COMMENT '生产能力',
+  `land_scale` varchar(50) DEFAULT NULL COMMENT '占地规模',
+  `ep_boundary` varchar(50) DEFAULT NULL COMMENT '企业边界',
+  `production_state` varchar(10) DEFAULT NULL COMMENT '0:生产，1:停产',
+  `plan_img` varchar(100) DEFAULT NULL COMMENT '平面图',
+  `risk_level` varchar(10) DEFAULT NULL COMMENT '风险等级',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_facedata` */
+
+DROP TABLE IF EXISTS `tb_facedata`;
+
+CREATE TABLE `tb_facedata` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键序号',
+  `fTime` varchar(20) DEFAULT NULL COMMENT '时间',
+  `dID` varchar(20) DEFAULT NULL COMMENT '设备ID',
+  `result` varchar(20) DEFAULT NULL COMMENT '识别结果',
+  `name` varchar(20) DEFAULT NULL COMMENT '姓名',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_facedata_2021_09` */
+
+DROP TABLE IF EXISTS `tb_facedata_2021_09`;
+
+CREATE TABLE `tb_facedata_2021_09` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键序号',
+  `fTime` varchar(20) DEFAULT NULL COMMENT '时间',
+  `dID` varchar(20) DEFAULT NULL COMMENT '设备ID',
+  `result` varchar(20) DEFAULT NULL COMMENT '识别结果',
+  `NAME` varchar(20) DEFAULT NULL COMMENT '姓名',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=5 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_facemode` */
+
+DROP TABLE IF EXISTS `tb_facemode`;
+
+CREATE TABLE `tb_facemode` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键序号',
+  `name` varchar(20) DEFAULT NULL COMMENT '姓名GB2312',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=16 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_humidity_device` */
+
+DROP TABLE IF EXISTS `tb_humidity_device`;
+
+CREATE TABLE `tb_humidity_device` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `name` varchar(20) DEFAULT NULL COMMENT '传感器名称',
+  `hd_code` varchar(20) DEFAULT NULL COMMENT '传感器编码',
+  `install_add` varchar(50) DEFAULT NULL COMMENT '安装位置',
+  `realtime_value` varchar(10) DEFAULT NULL COMMENT '实时值',
+  `alarm_threshold` varchar(10) DEFAULT NULL COMMENT '报警阈值',
+  `range` varchar(20) DEFAULT NULL COMMENT '量程',
+  `alarm_time` varchar(30) DEFAULT NULL COMMENT '报警时间',
+  `alarm_recovery_time` varchar(30) DEFAULT NULL COMMENT '消警时间',
+  `alarm_duration` varchar(20) DEFAULT NULL COMMENT '报警持续时间',
+  `alarm_total_times` varchar(10) DEFAULT NULL COMMENT '报警累计次数',
+  `install_date` varchar(30) DEFAULT NULL COMMENT '传感器联网时间',
+  `state` varchar(10) DEFAULT NULL COMMENT '传感器联网状态',
+  `alarm_state` varchar(10) DEFAULT NULL COMMENT '报警状态',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_license` */
+
+DROP TABLE IF EXISTS `tb_license`;
+
+CREATE TABLE `tb_license` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_name` varchar(100) DEFAULT NULL COMMENT '企业名称',
+  `license_no` varchar(18) DEFAULT NULL COMMENT '许可证编号',
+  `responsible_person` varchar(20) DEFAULT NULL COMMENT '企业负责人',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编号',
+  `worksite_add` varchar(150) DEFAULT NULL COMMENT '单位地址',
+  `economic_type` varchar(10) DEFAULT NULL COMMENT '经济类型',
+  `license_limits` varchar(200) DEFAULT NULL COMMENT '许可证范围',
+  `license_expiry_date` varchar(30) DEFAULT NULL COMMENT '许可证有效期限',
+  `Issuing_authority` varchar(100) DEFAULT NULL COMMENT '发证机关',
+  `Issuing_date` varchar(30) DEFAULT NULL COMMENT '发证日期',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_medicine_device` */
+
+DROP TABLE IF EXISTS `tb_medicine_device`;
+
+CREATE TABLE `tb_medicine_device` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `dev_name` varchar(20) DEFAULT NULL COMMENT '设备名称',
+  `dev_code` varchar(20) DEFAULT NULL COMMENT '设备编码',
+  `install_add` varchar(50) DEFAULT NULL COMMENT '安装场所',
+  `dev_model` varchar(20) DEFAULT NULL COMMENT '设备型号',
+  `factory` varchar(50) DEFAULT NULL COMMENT '生产厂家',
+  `manufacture_date` varchar(30) DEFAULT NULL COMMENT '生产日期',
+  `verification_date` varchar(30) DEFAULT NULL COMMENT '安全验证日期',
+  `production_date` varchar(30) DEFAULT NULL COMMENT '投用日期',
+  `repair_date` varchar(30) DEFAULT NULL COMMENT '最后维修日期',
+  `repair_times` varchar(10) DEFAULT NULL COMMENT '维修次数',
+  `realtime_value` varchar(10) DEFAULT NULL COMMENT '实时值',
+  `alarm_threshold` varchar(10) DEFAULT NULL COMMENT '报警阈值',
+  `alarm_time` varchar(30) DEFAULT NULL COMMENT '报警时间',
+  `alarm_recovery_time` varchar(30) DEFAULT NULL COMMENT '消警时间',
+  `alarm_duration` varchar(20) DEFAULT NULL COMMENT '报警持续时间',
+  `alarm_total_times` varchar(10) DEFAULT NULL COMMENT '报警累计次数',
+  `install_date` varchar(30) DEFAULT NULL COMMENT '传感器联网时间',
+  `state` varchar(10) DEFAULT NULL COMMENT '传感器联网状态',
+  `current_state` varchar(10) DEFAULT NULL COMMENT '上电运行状态',
+  `alarm_state` varchar(10) DEFAULT NULL COMMENT '报警状态',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_modularmenu` */
+
+DROP TABLE IF EXISTS `tb_modularmenu`;
+
+CREATE TABLE `tb_modularmenu` (
+  `id` int(5) unsigned NOT NULL AUTO_INCREMENT,
+  `modularName` varchar(30) DEFAULT NULL,
+  `parentId` int(2) DEFAULT '-1',
+  `modularLevel` varchar(10) DEFAULT NULL COMMENT '模块菜单在UI中的第几级',
+  `modularIndex` int(2) DEFAULT NULL COMMENT '相同级数中的索引位置',
+  `url` varchar(200) DEFAULT NULL COMMENT '对应的后台地址',
+  `icon` varchar(20) DEFAULT NULL,
+  `uiName` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=79 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_modularmenu_copy` */
+
+DROP TABLE IF EXISTS `tb_modularmenu_copy`;
+
+CREATE TABLE `tb_modularmenu_copy` (
+  `id` int(5) unsigned NOT NULL AUTO_INCREMENT,
+  `modularName` varchar(30) DEFAULT NULL,
+  `parentId` int(2) DEFAULT '-1',
+  `modularLevel` varchar(10) DEFAULT NULL COMMENT '模块菜单在UI中的第几级',
+  `modularIndex` int(2) DEFAULT NULL COMMENT '相同级数中的索引位置',
+  `url` varchar(200) DEFAULT NULL COMMENT '对应的后台地址',
+  `icon` varchar(20) DEFAULT NULL,
+  `uiName` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_organization` */
+
+DROP TABLE IF EXISTS `tb_organization`;
+
+CREATE TABLE `tb_organization` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `organizationName` varchar(100) DEFAULT NULL COMMENT '组织/公司名称',
+  `organizationCode` varchar(7) DEFAULT NULL,
+  `organizationLevel` int(2) DEFAULT NULL COMMENT '组织级别',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_overtime_device` */
+
+DROP TABLE IF EXISTS `tb_overtime_device`;
+
+CREATE TABLE `tb_overtime_device` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `name` varchar(20) DEFAULT NULL COMMENT '传感器名称',
+  `od_code` varchar(20) DEFAULT NULL COMMENT '传感器编码',
+  `install_add` varchar(50) DEFAULT NULL COMMENT '安装位置',
+  `realtime_value` varchar(10) DEFAULT NULL COMMENT '实时值',
+  `alarm_threshold` varchar(10) DEFAULT NULL COMMENT '报警阈值',
+  `alarm_time` varchar(30) DEFAULT NULL COMMENT '报警时间',
+  `alarm_recovery_time` varchar(30) DEFAULT NULL COMMENT '消警时间',
+  `alarm_duration` varchar(20) DEFAULT NULL COMMENT '报警持续时间',
+  `alarm_total_times` varchar(10) DEFAULT NULL COMMENT '报警累计次数',
+  `install_date` varchar(30) DEFAULT NULL COMMENT '传感器联网时间',
+  `state` varchar(10) DEFAULT NULL COMMENT '传感器联网状态',
+  `alarm_state` varchar(10) DEFAULT NULL COMMENT '报警状态',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_person` */
+
+DROP TABLE IF EXISTS `tb_person`;
+
+CREATE TABLE `tb_person` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(20) DEFAULT NULL COMMENT '企业编码',
+  `name` varchar(20) DEFAULT NULL COMMENT '姓名',
+  `tel` varchar(20) DEFAULT NULL COMMENT '联系方式',
+  `certificate` varchar(30) DEFAULT NULL COMMENT '证书编号',
+  `type` varchar(10) DEFAULT NULL COMMENT '人员类型 01：法人，02：安全负责人，03：安全管理员，04：特种作业人员',
+  `industry_model` varchar(10) DEFAULT NULL COMMENT '行业类别',
+  `cert_date` varchar(30) DEFAULT NULL COMMENT '证书发证日期',
+  `cert_expiry_date` varchar(30) DEFAULT NULL COMMENT '证书有效期限',
+  `cert_review` varchar(30) DEFAULT NULL COMMENT '证书复审日期',
+  `issuing_authority` varchar(50) DEFAULT NULL COMMENT '证书发证机关',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_produtcion_record` */
+
+DROP TABLE IF EXISTS `tb_produtcion_record`;
+
+CREATE TABLE `tb_produtcion_record` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `production_state` varchar(10) DEFAULT NULL COMMENT '0:生产，1:停产',
+  `reason` varchar(100) DEFAULT NULL COMMENT '生产或停产原因',
+  `start_time` varchar(30) DEFAULT NULL COMMENT '执行时间',
+  `end_time` varchar(30) DEFAULT NULL COMMENT '结束时间',
+  `duration` varchar(20) DEFAULT NULL COMMENT '持续时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_promise_recode` */
+
+DROP TABLE IF EXISTS `tb_promise_recode`;
+
+CREATE TABLE `tb_promise_recode` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编号',
+  `sign_person` varchar(20) DEFAULT NULL COMMENT '签署人',
+  `sign_date` varchar(30) DEFAULT NULL COMMENT '签署时间',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_property_map` */
+
+DROP TABLE IF EXISTS `tb_property_map`;
+
+CREATE TABLE `tb_property_map` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `outPropter` varchar(30) DEFAULT NULL COMMENT '第三方属性',
+  `innerPropter` varchar(30) DEFAULT NULL COMMENT '自己内部属性',
+  `propertyType` varchar(11) DEFAULT NULL COMMENT '映射类型',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=33 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_risk_record` */
+
+DROP TABLE IF EXISTS `tb_risk_record`;
+
+CREATE TABLE `tb_risk_record` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `uploadtime` varchar(30) DEFAULT NULL COMMENT '变化时间',
+  `risk_state` varchar(10) DEFAULT NULL COMMENT '风险状态',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_role` */
+
+DROP TABLE IF EXISTS `tb_role`;
+
+CREATE TABLE `tb_role` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `roleName` varchar(30) DEFAULT NULL,
+  `organizationIndex` int(11) DEFAULT NULL,
+  `c_describe` varchar(250) DEFAULT NULL,
+  `createDateTime` varchar(30) DEFAULT NULL,
+  `modifyDateTime` varchar(30) DEFAULT NULL,
+  `createAccount` varchar(30) DEFAULT NULL,
+  `modifyAccount` varchar(30) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_role_modular` */
+
+DROP TABLE IF EXISTS `tb_role_modular`;
+
+CREATE TABLE `tb_role_modular` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `roleIndex` int(11) DEFAULT NULL,
+  `modularIndex` int(11) DEFAULT NULL,
+  `organizationIndex` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_supervise_record` */
+
+DROP TABLE IF EXISTS `tb_supervise_record`;
+
+CREATE TABLE `tb_supervise_record` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `supervise_unit` varchar(50) DEFAULT NULL COMMENT '监管检查单位',
+  `supervise_person` varchar(20) DEFAULT NULL COMMENT '检查人员',
+  `supervise_date` varchar(30) DEFAULT NULL COMMENT '检查时间',
+  `supervise_content` varchar(200) DEFAULT NULL COMMENT '检查内容',
+  `unqualified_items` varchar(200) DEFAULT NULL COMMENT '不合格项',
+  `rectification_period` varchar(30) DEFAULT NULL COMMENT '整改期限',
+  `rectification_person` varchar(20) DEFAULT NULL COMMENT '整改负责人',
+  `rectification_state` varchar(10) DEFAULT NULL COMMENT '整改状态 0：未开始，1：进行中，2：整改完毕',
+  `rectification_date` varchar(30) DEFAULT NULL COMMENT '整改完成时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_temp_device` */
+
+DROP TABLE IF EXISTS `tb_temp_device`;
+
+CREATE TABLE `tb_temp_device` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `name` varchar(20) DEFAULT NULL COMMENT '传感器名称',
+  `td_code` varchar(20) DEFAULT NULL COMMENT '传感器编码',
+  `install_add` varchar(50) DEFAULT NULL COMMENT '安装位置',
+  `realtime_value` varchar(10) DEFAULT NULL COMMENT '实时值',
+  `alarm_threshold` varchar(10) DEFAULT NULL COMMENT '报警阈值',
+  `range` varchar(20) DEFAULT NULL COMMENT '量程',
+  `alarm_time` varchar(30) DEFAULT NULL COMMENT '报警时间',
+  `alarm_recovery_time` varchar(30) DEFAULT NULL COMMENT '消警时间',
+  `alarm_duration` varchar(20) DEFAULT NULL COMMENT '报警持续时间',
+  `alarm_total_times` varchar(10) DEFAULT NULL COMMENT '报警累计次数',
+  `install_date` varchar(30) DEFAULT NULL COMMENT '传感器联网时间',
+  `state` varchar(10) DEFAULT NULL COMMENT '传感器联网状态',
+  `alarm_state` varchar(10) DEFAULT NULL COMMENT '报警状态',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_user` */
+
+DROP TABLE IF EXISTS `tb_user`;
+
+CREATE TABLE `tb_user` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `account` varchar(50) DEFAULT NULL,
+  `password` varchar(50) DEFAULT NULL,
+  `organizationId` int(11) DEFAULT NULL,
+  `createAccount` varchar(30) DEFAULT NULL,
+  `modifyAccount` varchar(30) DEFAULT NULL,
+  `createDateTime` varchar(30) DEFAULT NULL,
+  `modifyDateTime` varchar(30) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_user_role` */
+
+DROP TABLE IF EXISTS `tb_user_role`;
+
+CREATE TABLE `tb_user_role` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `organizationIndex` int(11) DEFAULT NULL COMMENT '组织索引',
+  `roleIndex` int(11) DEFAULT NULL COMMENT '角色索引',
+  `userIndex` int(11) DEFAULT NULL COMMENT '用户索引',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_warehouse` */
+
+DROP TABLE IF EXISTS `tb_warehouse`;
+
+CREATE TABLE `tb_warehouse` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `store_name` varchar(20) DEFAULT NULL COMMENT '仓库名称',
+  `store_code` varchar(20) DEFAULT NULL COMMENT '仓库编码',
+  `store_add` varchar(50) DEFAULT NULL COMMENT '仓库地址',
+  `wh_name` varchar(20) DEFAULT NULL COMMENT '库房名称',
+  `wh_code` varchar(20) DEFAULT NULL COMMENT '库房编码',
+  `wh_area` varchar(20) DEFAULT NULL COMMENT '库房面积',
+  `wh_level` varchar(10) DEFAULT NULL COMMENT '库房危险等级，01：1.1-1级；02：1.1-2级；03：1.3级；04：无药仓库',
+  `wh_person_num` varchar(10) DEFAULT NULL COMMENT '库房定员数量',
+  `wh_dosage` varchar(20) DEFAULT NULL COMMENT '库房核定药量',
+  `wh_charge_person` varchar(20) DEFAULT NULL COMMENT '库房负责人',
+  `wh_capacity` varchar(20) DEFAULT NULL COMMENT '库房容量',
+  `wh_lon` varchar(20) DEFAULT NULL COMMENT '库房经度',
+  `wh_lat` varchar(20) DEFAULT NULL COMMENT '库房纬度',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*Table structure for table `tb_worksite` */
+
+DROP TABLE IF EXISTS `tb_worksite`;
+
+CREATE TABLE `tb_worksite` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `ep_code` varchar(9) DEFAULT NULL COMMENT '企业编码',
+  `ws_name` varchar(20) DEFAULT NULL COMMENT '工房名称',
+  `ws_code` varchar(20) DEFAULT NULL COMMENT '工房编码',
+  `ws_area` varchar(20) DEFAULT NULL COMMENT '工房面积',
+  `ws_level` varchar(10) DEFAULT NULL COMMENT '工房危险等级 01：1.1-1级；02：1.1-2级；03：1.3级；04：无药工位',
+  `ws_person_num` varchar(10) DEFAULT NULL COMMENT '工房定员数量',
+  `ws_dosage` varchar(20) DEFAULT NULL COMMENT '工房核定药量',
+  `ws_charge_person` varchar(20) DEFAULT NULL COMMENT '工房负责人',
+  `ws_lon` varchar(20) DEFAULT NULL COMMENT '工房经度',
+  `ws_lgt` varchar(20) DEFAULT NULL COMMENT '工房纬度',
+  `ws_add` varchar(200) DEFAULT NULL COMMENT '工房地址',
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;

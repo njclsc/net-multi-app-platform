@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.timely.business.dao.TimelyDataDao">
+	<select id="findTopArea" parameterType="bd.nmam.timely.business.pojo.UserPojo"
+		resultType="bd.nmam.timely.business.pojo.TreeAreaPojo">
+		select id as _id ,
+			areaName as _areaName,
+			districtId as _districtId,
+			areaLevel as _areaLevel,
+			areaCode as _areaCode,
+			parentAreaCode as _parentAreaCode from tb_area 
+		where areaCode in (
+			SELECT areaCode FROM tb_device WHERE deviceGroupIndex IN (
+				SELECT deviceGroupIndex FROM tb_user_devicegroup WHERE userIndex = ${id}
+			)
+			GROUP BY areaCode
+		)
+	</select>
+	<select id="findDevice" parameterType="bd.nmam.timely.business.pojo.TreeAreaPojo" 
+		resultType = "bd.nmam.timely.business.pojo.TreeAreaPojo">
+		SELECT dev_id as _dev_id, devName as _devName FROM tb_device WHERE areaCode = #{_areaCode} AND deviceGroupIndex IN (
+			SELECT deviceGroupIndex FROM tb_user_devicegroup WHERE userIndex = ${userId}
+		)
+	</select>
+	<select id="findParentNode" parameterType="bd.nmam.timely.business.pojo.TreeAreaPojo" 
+		resultType = "bd.nmam.timely.business.pojo.TreeAreaPojo">
+		select id as _id ,
+			areaName as _areaName,
+			districtId as _districtId,
+			areaLevel as _areaLevel,
+			areaCode as _areaCode,
+			parentAreaCode as _parentAreaCode from tb_area where areaCode = #{_parentAreaCode}
+	</select>
+	
+</mapper>

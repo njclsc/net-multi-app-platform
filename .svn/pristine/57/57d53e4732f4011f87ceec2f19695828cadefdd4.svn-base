@@ -1,0 +1,235 @@
+package bd.nmam.collection.config;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.HashMap;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import bd.nmam.collection.business.pojo.jiangxi.DevicePojo;
+import bd.nmam.collection.config.channelinitializer.JXHttpBusinessInitializer;
+import bd.nmam.collection.config.channelinitializer.JXTCPBusinessInitializer;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+
+@Configuration
+public class BusinessOperateConfig {
+	@Autowired
+	@Qualifier("dataSourceDruid")
+	private DataSource dataSource;
+	//-----------------业务线程池------------------------
+	@Value("${data.threadPool.corePoolSize}")
+	private int corePoolSize;
+	@Value("${data.threadPool.maximumPoolSize}")
+    private int maximumPoolSize;
+	@Value("${data.threadPool.keepAliveTim}")
+    private long keepAliveTim;
+	
+	private static ThreadPoolExecutor threadPool;
+	//-----------------业务数据处理------------------------
+	//-----------------tcpServer------------------------
+	@Value("#{'${business.tcpServer.allKeys}'.split(',')}")
+	private String[] allKey;
+	@Value("${business.tcpServer.usedKey}")
+	private String usedKey;
+	private static String _usedKey;
+	//-----------------udp------------------------
+	@Value("#{'${business.udp.allKeys}'.split(',')}")
+	private String[] UdpAllKey;
+	@Value("${business.udp.usedKey}")
+	private String UdpUsedKey;
+	private static String _UdpUsedKey;
+	//-----------------http------------------------
+	@Value("#{'${business.http.allKeys}'.split(',')}")
+	private String[] httpAllKey;
+	@Value("${business.http.usedKey}")
+	private String httpUsedKey;
+	private static String _httpUsedKey;
+	
+	
+	
+	
+	//-------------数据处理-------------------
+	//-------------江西开始-------------------
+	//设备网络地址缓存
+	private static HashMap<String, DevicePojo> devices = new HashMap<String, DevicePojo>();
+	//江西项目摄像头设备绑定缓存
+	private static HashMap<String,String> cameraBandbuf = new HashMap<String,String>();
+	//报警级别缓存
+	private static HashMap<String, String> alarmLVBuf = new HashMap<String,String>();
+	//-------------江西结束-------------------
+	
+	
+	
+	
+	
+	
+	
+	@Bean(name = "initializers")
+	public HashMap<String, ? extends ChannelInboundHandlerAdapter> initializers(){
+		HashMap<String, ChannelInboundHandlerAdapter> initializers = new HashMap<>();
+		//-----------------测试tcpServer demo------------------------
+		{
+			initializers.put(allKey[0].trim(), new JXTCPBusinessInitializer());
+//			initializers.put(allKey[1].trim(), new T());
+		}
+		//-----------------测试dup demo------------------------
+		{
+//			initializers.put(UdpAllKey[0].trim(), new UDPChnnelinitializer());
+//			initializers.put(UdpAllKey[1].trim(), new UT());
+		}
+		//-----------------测试http demo------------------------
+		{
+//			initializers.put(httpAllKey[0].trim(), new JXHttpBusinessInitializer());
+		}
+		
+		
+		
+		
+		BusinessOperateConfig.set_usedKey(usedKey);
+		BusinessOperateConfig.set_UdpUsedKey(UdpUsedKey);
+		BusinessOperateConfig.set_httpUsedKey(httpUsedKey);
+		return initializers;
+	}
+	@Bean(name = "threadPool")
+	public ThreadPoolExecutor threadPoolConfig(){
+		ThreadPoolExecutor threadPool = new ThreadPoolExecutor(
+				corePoolSize, maximumPoolSize, keepAliveTim, TimeUnit.MILLISECONDS,
+				new ArrayBlockingQueue<Runnable>(maximumPoolSize)
+			);
+		BusinessOperateConfig.setThreadPool(threadPool);
+		return threadPool;
+	}
+	@Bean(name = "devices_jiangxi")
+	public HashMap<String, DevicePojo> loadDevices(){
+		HashMap<String, DevicePojo> devices = new HashMap<String, DevicePojo>();
+		try {
+			Connection con = dataSource.getConnection();
+			//第一级设备加载[江西项目网络盒]
+			String sql = "select * from tb_device where parentId = 0";
+			Statement stat = con.createStatement();
+			ResultSet rs = stat.executeQuery(sql);
+			while(rs.next()){
+				DevicePojo dp = new DevicePojo();
+				dp.setId(rs.getInt("id"));
+				dp.setDev_id(rs.getString("dev_id"));
+				dp.setDev_local_ip(rs.getString("dev_local_ip"));
+				dp.setDev_local_port(rs.getInt("dev_local_port"));
+				dp.setDev_target_ip(rs.getString("dev_target_ip"));
+				dp.setDev_target_port(rs.getInt("dev_target_port"));
+				dp.setDevType(rs.getInt("devType"));
+				dp.setParentId(rs.getInt("parentId"));
+				String sql1 = "select * from tb_device where parentId != 0 and parentId = " + dp.getId();
+				Statement stat1 = con.createStatement();
+				ResultSet rs1 = stat1.executeQuery(sql1);
+				while(rs1.next()){
+					DevicePojo dp1 = new DevicePojo();
+					dp1.setId(rs.getInt("id"));
+					dp1.setDev_id(rs.getString("dev_id"));
+					dp1.setDevType(rs.getInt("devType"));
+					dp1.setParentId(rs.getInt("parentId"));
+					dp.getClientDev().put(dp1.getDev_id(), dp1);
+				}
+				rs1.close();
+				stat1.close();
+				devices.put(dp.getDev_id(), dp);
+			}
+			rs.close();
+			stat.close();
+			con.close();
+			BusinessOperateConfig.setDevices(devices);
+			return devices;
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+	@Bean
+	public Object bufferLoad() throws Exception{
+		//设备
+		String sql = "select ip_add, cd_code from tb_camera_device";
+		Connection con = Configuer.getDataSource().getConnection();
+		Statement stat = con.createStatement();
+		ResultSet rs = stat.executeQuery(sql);
+		while(rs.next()){
+			BusinessOperateConfig.getCameraBandbuf().put(rs.getString("ip_add"), rs.getString("cd_code"));
+		}
+		rs.close();
+		stat.close();
+		//报警级别
+		String sql1 = "select * from alarmdictionaries";
+		Statement stat1 = con.createStatement();
+		ResultSet rs1 = stat1.executeQuery(sql1);
+		while(rs1.next()){
+			String signalID = rs1.getString("signalID");
+			String alarmLV = rs1.getString("alarmLV");
+			//当alarmlv在数据字典中不为null且不为空，放入缓存
+			if(alarmLV!=null && alarmLV!=""){
+				BusinessOperateConfig.getAlarmLVBuf().put(signalID, alarmLV);
+			}
+		}
+		rs1.close();
+		stat1.close();
+		con.close();
+		return null;
+	}
+	public static String get_UdpUsedKey() {
+		return _UdpUsedKey;
+	}
+	public static void set_UdpUsedKey(String _UdpUsedKey) {
+		BusinessOperateConfig._UdpUsedKey = _UdpUsedKey;
+	}
+	public static ThreadPoolExecutor getThreadPool() {
+		return threadPool;
+	}
+	public static void setThreadPool(ThreadPoolExecutor threadPool) {
+		BusinessOperateConfig.threadPool = threadPool;
+	}
+	public static String get_usedKey() {
+		return _usedKey;
+	}
+	public String getUdpUsedKey() {
+		return UdpUsedKey;
+	}
+	public void setUdpUsedKey(String udpUsedKey) {
+		UdpUsedKey = udpUsedKey;
+	}
+	public static void set_usedKey(String _usedKey) {
+		BusinessOperateConfig._usedKey = _usedKey;
+	}
+	public static String get_httpUsedKey() {
+		return _httpUsedKey;
+	}
+	public static void set_httpUsedKey(String _httpUsedKey) {
+		BusinessOperateConfig._httpUsedKey = _httpUsedKey;
+	}
+	public static HashMap<String, DevicePojo> getDevices() {
+		return devices;
+	}
+	public static void setDevices(HashMap<String, DevicePojo> devices) {
+		BusinessOperateConfig.devices = devices;
+	}
+	public static HashMap<String, String> getCameraBandbuf() {
+		return cameraBandbuf;
+	}
+	public static void setCameraBandbuf(HashMap<String, String> cameraBandbuf) {
+		BusinessOperateConfig.cameraBandbuf = cameraBandbuf;
+	}
+	public static HashMap<String, String> getAlarmLVBuf() {
+		return alarmLVBuf;
+	}
+	public static void setAlarmLVBuf(HashMap<String, String> alarmLVBuf) {
+		BusinessOperateConfig.alarmLVBuf = alarmLVBuf;
+	}
+}

@@ -1,0 +1,27 @@
+package bd.nmam.collection.business.handler.jiangxi;
+
+import bd.nmam.collection.business.task.jiangxi.AlarmOperateTask;
+import bd.nmam.collection.config.BusinessOperateConfig;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+
+public class JiangXiTcpServerHander extends ChannelInboundHandlerAdapter{
+
+	@Override
+	public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+	}
+	
+	@Override
+	public void channelActive(ChannelHandlerContext ctx) throws Exception {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+		// TODO Auto-generated method stub
+		BusinessOperateConfig.getThreadPool().execute(new AlarmOperateTask(ctx, msg));
+	}
+
+
+}

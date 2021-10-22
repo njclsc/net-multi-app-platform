@@ -1,0 +1,104 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.ParamPojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianParamOperateThread implements Runnable{
+	private HashMap<String, ParamPojo> timlyParamBuf;
+	private long rate;
+	private DataSource ds;
+	private SimpleDateFormat sdfStand;
+	
+	public BeidianParamOperateThread(long rate){
+		this.timlyParamBuf = ContainerUtil.getTimlyParamBuf();
+		this.rate = rate;
+		this.ds = DatabaseUtil.getDataSource();
+		this.sdfStand = ContainerUtil.getSdfStand();
+	}
+	public void run(){
+		while(true){
+			//ContainerUtil.getLoggerWrite().error("实时告警存储线程存活");
+			try{
+				paramOperate();
+				Thread.sleep(rate);
+			}catch(Exception e){
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			}
+		}
+	}
+	private void paramOperate(){
+		Connection con = null;
+		Statement stat = null;
+		try{
+			con = ds.getConnection();
+			StringBuffer sb = new StringBuffer();
+			sb.append("insert into tb_device_param(deviceId, channel, param, uploadTime) values");
+			Iterator<Map.Entry<String, ParamPojo>> itr = timlyParamBuf.entrySet().iterator();
+			int newCount = 0;
+			while(itr.hasNext()){
+				Map.Entry<String, ParamPojo> entry = itr.next();
+				String key = entry.getKey();
+				ParamPojo pp = entry.getValue();
+				//new operate
+				if(pp.isNewFlag()){
+					sb.append(",('");sb.append(pp.getDeviceId());sb.append("', '");
+					sb.append(pp.getChannel());sb.append("', '");
+					sb.append(pp.getParam());sb.append("', '");
+					sb.append(sdfStand.format(pp.getUploadTime()));sb.append("')");
+					pp.setNewFlag(false);
+					newCount += 1;
+					//old operate
+				}else if(pp.isChangeFlag()){
+					StringBuffer sb2 = new StringBuffer();
+					sb2.append("update tb_device_param set ");
+					sb2.append("param = '");sb2.append(pp.getParam());sb2.append("', ");
+					sb2.append("uploadTime = '");sb2.append(sdfStand.format(pp.getUploadTime()));sb2.append("' where deviceId = '");
+					sb2.append(pp.getDeviceId()); sb2.append("' and channel = '");sb2.append(pp.getChannel());sb2.append("'");
+					pp.setChangeFlag(false);
+					Statement oldStat = con.createStatement();
+					oldStat.executeUpdate(sb2.toString());
+					oldStat.close();
+				}
+			}
+			if(newCount > 0){
+//				System.out.println(sb1.toString());
+				int index1 = sb.indexOf("values,(");
+				String sql = sb.replace(index1, index1 + 8, "values(").toString();
+//				System.out.println(sql);
+				stat = con.createStatement();
+				stat.executeUpdate(sql);
+				stat.close();
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}finally{
+			try {
+				if(stat != null){
+					stat.close();
+				}
+				if(con != null){
+					con.close();
+				}
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+}

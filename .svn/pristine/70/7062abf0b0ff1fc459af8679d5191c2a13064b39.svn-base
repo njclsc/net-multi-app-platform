@@ -1,0 +1,26 @@
+package bd.nmam.history.starter;
+
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
+import org.springframework.context.annotation.ComponentScan;
+
+
+@ComponentScan(basePackages = {"bd.nmam.history"})
+@MapperScan(basePackages = {"bd.nmam.history.business"})
+@SpringBootApplication
+public class HistoryStarter extends SpringBootServletInitializer{
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		SpringApplication.run(HistoryStarter.class, args);
+	}
+
+	@Override
+	protected SpringApplicationBuilder configure(SpringApplicationBuilder builder) {
+		// TODO Auto-generated method stub
+		return builder.sources(HistoryStarter.class);
+	}
+}
+

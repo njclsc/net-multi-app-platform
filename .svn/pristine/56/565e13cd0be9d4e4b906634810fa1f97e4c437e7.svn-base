@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.manager.business.dao.RoleManagerDao">
+	<insert id="add" parameterType="bd.nmam.manager.business.pojo.RolePojo">
+		insert into tb_role(roleName, organizationIndex, c_describe, createDateTime, createAccount)
+			values(#{roleName}, ${organizationIndex}, #{c_describe}, #{createDateTime}, #{createAccount})
+	</insert>
+	<select id = "count" parameterType = "bd.nmam.manager.business.pojo.RolePojo" resultType = "Integer">
+		select count(*) from tb_role where roleName = #{roleName}
+	</select>
+	<delete id="remove" parameterType = "bd.nmam.manager.business.pojo.RolePojo">
+		delete from tb_role where id = ${id}
+	</delete>
+	<update id="modify" parameterType = "bd.nmam.manager.business.pojo.RolePojo">
+		update tb_role set roleName = #{roleName}, c_describe = #{c_describe}, modifyDateTime = #{modifyDateTime}, modifyAccount = #{modifyAccount}
+		where id = ${id}
+	</update>
+	<select id="find" parameterType = "bd.nmam.manager.business.pojo.RolePojo" resultType = "bd.nmam.manager.business.pojo.RolePojo">
+		SELECT 
+			t1.id,
+			t1.roleName,
+			t1.organizationIndex,
+			t1.c_describe,
+			t1.createDateTime,
+			t1.modifyDateTime,
+			t3.account as modifyAccount,
+			t2.account as createAccount
+		FROM tb_role AS t1
+		LEFT JOIN tb_user AS t2 ON t2.id = t1.createAccount
+		LEFT JOIN tb_user AS t3 ON t3.id = t1.modifyAccount
+		
+		where 1 = 1
+		<if test="roleName != null and roleName != ''">
+			and t1.roleName like concat('%', #{roleName}, '%')
+		</if>
+		<if test="createAccount != null and createAccount != ''">
+			and t1.createAccount = #{createAccount}
+		</if>
+		<if test="modifyAccount != null and modifyAccount != ''">
+			and t1.modifyAccount = #{modifyAccount}
+		</if>
+		<if test="beginDateTime != null and beginDateTime != ''">
+			and t1.createDateTime &gt;= #{beginDateTime}
+		</if>
+		<if test= "endDateTime != null and endDateTime != ''">
+			and t1.createDateTime &lt;= #{endDateTime}
+		</if>
+		limit ${beginRow}, ${rows}
+	</select>
+	<select id="findCount" parameterType = "bd.nmam.manager.business.pojo.RolePojo" resultType = "Integer">
+		select count(*) from tb_role AS t1
+		LEFT JOIN tb_user AS t2 ON t2.id = t1.createAccount 
+		LEFT JOIN tb_user AS t3 ON t3.id = t1.modifyAccount
+		where 1 = 1
+		<if test="roleName != null and roleName != ''">
+			and t1.roleName like concat('%', #{roleName}, '%')
+		</if>
+		<if test="createAccount != null and createAccount != ''">
+			and t1.createAccount = #{createAccount}
+		</if>
+		<if test="modifyAccount != null and modifyAccount != ''">
+			and t1.modifyAccount = #{modifyAccount}
+		</if>
+		<if test="beginDateTime != null and beginDateTime != ''">
+			and t1.createDateTime &gt;= #{beginDateTime}
+		</if>
+		<if test= "endDateTime != null and endDateTime != ''">
+			and t1.createDateTime &lt;= #{endDateTime}
+		</if>
+	</select>
+	<select id="showRoleAndModular" parameterType = "bd.nmam.manager.business.pojo.RolePojo" resultType = "bd.nmam.manager.business.pojo.ModularPojo">
+		SELECT tb_modularmenu.*  FROM tb_modularmenu WHERE tb_modularmenu.modularLevel = 0 
+		AND tb_modularmenu.id NOT IN 
+		  (SELECT tb_role_modular.modularIndex FROM tb_role_modular 
+			WHERE tb_role_modular.roleIndex = ${id})
+	</select>
+	<insert id="updateRoleAndModular" parameterType = "bd.nmam.manager.business.pojo.RoleModularPojo">
+		insert into tb_role_modular(roleIndex, modularIndex, organizationIndex) values 
+		<foreach collection="list" item = "item" separator = ",">
+			(#{item.roleIndex}, #{item.modularIndex}, #{item.organizationIndex})
+		</foreach>
+	</insert>
+	<select id="haveRoleAndModular" parameterType = "bd.nmam.manager.business.pojo.RolePojo" resultType = "bd.nmam.manager.business.pojo.ModularPojo">
+	SELECT * FROM tb_role_modular LEFT JOIN tb_modularmenu ON tb_role_modular.modularIndex = tb_modularmenu.id
+	WHERE tb_role_modular.roleIndex = ${id} AND tb_modularmenu.modularLevel = 0
+	</select>
+	<delete id="removeRoleAndModular" parameterType = "bd.nmam.manager.business.pojo.RoleModularPojo">
+		delete from tb_role_modular where roleIndex = ${roleIndex} and modularIndex = ${modularIndex}
+	</delete>
+</mapper>

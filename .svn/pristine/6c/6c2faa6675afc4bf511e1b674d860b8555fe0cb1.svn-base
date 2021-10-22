@@ -1,0 +1,206 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.AlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianAlarmOperateThread implements Runnable{
+	private HashMap<String, DevicePojo> devices;
+	private long rate;
+	private String ALARM_TYPE_SWITCH = "switch";
+	private String ALARM_TYPE_ANALOG = "analog";
+	private String ALARM_TYPE_CUSTOM = "custom";
+	private SimpleDateFormat sdfTable;
+	private SimpleDateFormat sdfStand;
+	private String insert1 = "insert into alarm_";
+	private String insert2 = "(deviceId, signalName, alarmStatus, switchStatus, analogValue, uploadDateTime) values";
+	private String tmpBegin = ",('";
+	private String tmpMidd = "', '";
+	private String tmpOFF = "OFF";
+	private String tmpON = "ON";
+	private String tmpPrE = "preset";
+	private String tmpNULL = "', NULL";
+	private String tmpEnd1 = ", '";
+	private String tmpEnd2 = "')";
+	private ReentrantLock reentranLock;
+	private DataSource dataSource;
+	
+	public BeidianAlarmOperateThread(long rate) {
+		this.devices = ContainerUtil.getDevices();
+		this.rate = rate;
+		this.dataSource = DatabaseUtil.getDataSource();
+		this.sdfTable = ContainerUtil.getSdfTable();
+		this.sdfStand = ContainerUtil.getSdfStand();
+		this.reentranLock = ContainerUtil.getReentrantLock();
+	}
+
+	public void run() {
+		while (true) {
+			//ContainerUtil.getLoggerWrite().error("历史告警存储线程存活");
+			Connection con = null;
+			Statement stat = null;
+			try {
+
+				Iterator<Map.Entry<String, DevicePojo>> itr = null;
+				synchronized(reentranLock){
+					itr = devices.entrySet().iterator();
+//				}
+				StringBuffer sql = new StringBuffer();
+				StringBuffer sqlInsert = new StringBuffer();
+				StringBuffer sqlUpdate = new StringBuffer();
+				int ixFlag = 0;
+				long currentTime = System.currentTimeMillis();
+				while(itr.hasNext()){
+					DevicePojo dp = itr.next().getValue();
+//					dp.setRefreshTime(currentTime);
+					switch(dp.getAlarmFlag()){
+					case 1:
+						List<AlarmPojo> list2 = dp.getAlarms2();
+						ixFlag += saveAlarm(dp.getDeviceId(), list2, sql);
+						list2.clear();
+						dp.setAlarmFlag(2);
+						break;
+					case 2:
+						List<AlarmPojo> list1 = dp.getAlarms1();
+						ixFlag += saveAlarm(dp.getDeviceId(), list1, sql);
+						list1.clear();
+						dp.setAlarmFlag(1);
+						break;
+					}
+				}
+				if(ixFlag > 0){
+					
+					sql.replace(0, 1, "");
+					sql.insert(0, insert2);
+					sql.insert(0, sdfTable.format(new Date()));
+					sql.insert(0, insert1);
+					con = dataSource.getConnection();
+					createTableForAlarm(con);
+					stat = con.createStatement();
+					stat.executeUpdate(sql.toString());
+					System.out.println("报警保存完毕....");
+				}
+				}
+				Thread.sleep(rate);
+			} catch (Exception e) {
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			}finally{
+				try{
+				if(stat != null){
+					stat.close();
+				}
+				if(con != null){
+					con.close();
+				}
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+
+	private int saveAlarm(String deviceId, List<AlarmPojo> list, StringBuffer sql){
+		try{
+			int ix = 0;
+			for(AlarmPojo ap : list){
+				if(ap.getTypeFlag().equals(ALARM_TYPE_SWITCH)){
+					sql.append(tmpBegin);
+					sql.append(deviceId);
+					sql.append(tmpMidd);
+					sql.append(ap.getSignalId());
+					sql.append(tmpMidd);
+					sql.append(ap.getAlarmStatus());
+					sql.append(tmpMidd);
+					if(ap.getSwitchStatus() == 0){
+						sql.append(tmpOFF);
+					}else if(ap.getSwitchStatus() == 1){
+						sql.append(tmpON);
+					}else if(ap.getSwitchStatus()==10){
+						sql.append(tmpPrE);
+					}
+					sql.append(tmpNULL);
+					sql.append(tmpEnd1);
+					sql.append(sdfStand.format(ap.getUploadTime()));
+					sql.append(tmpEnd2);
+					ix += 1;
+				}else if(ap.getTypeFlag().equals(ALARM_TYPE_ANALOG)){
+					sql.append(tmpBegin);
+					sql.append(deviceId);
+					sql.append(tmpMidd);
+					sql.append(ap.getSignalId());
+					sql.append(tmpMidd);
+					sql.append(ap.getAlarmStatus());
+					sql.append(tmpNULL);
+
+					sql.append(tmpEnd1);
+					sql.append(ap.getAnalogValue());
+					sql.append(tmpMidd);
+					sql.append(sdfStand.format(ap.getUploadTime()));
+					sql.append(tmpEnd2);
+					ix += 1;
+				}else if(ap.getTypeFlag().equals(ALARM_TYPE_CUSTOM)){
+					sql.append(tmpBegin);
+					sql.append(deviceId);
+					sql.append(tmpMidd);
+					sql.append(ap.getSignalId());
+					sql.append(tmpMidd);
+					sql.append(ap.getAlarmStatus());
+					sql.append(tmpNULL);
+
+					sql.append(", ");
+					sql.append("NULL");
+					sql.append(tmpEnd1);
+					sql.append(sdfStand.format(ap.getUploadTime()));
+					sql.append(tmpEnd2);
+					ix += 1;
+				}
+			}
+			return ix;
+		}catch(Exception e){
+			e.printStackTrace();
+			return 0;
+		}
+	}
+	
+	// 创建报警量表
+	public void createTableForAlarm(Connection con) throws SQLException {
+		StringBuffer sb = new StringBuffer();
+		sb.append("create table if not exists alarm_");
+		sb.append(sdfTable.format(new Date()));
+		sb.append("(id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',");
+		sb.append("deviceId VARCHAR(30) DEFAULT NULL COMMENT '设备ID',");
+		sb.append("signalName VARCHAR(100) DEFAULT NULL COMMENT '信号名称',");
+		sb.append("alarmStatus VARCHAR(50) DEFAULT NULL COMMENT '信号状态0:正常1：告警',");
+		sb.append("switchStatus VARCHAR(50) DEFAULT NULL COMMENT '开关状态0：低电平1：高电平',");
+		sb.append("analogValue VARCHAR(50) DEFAULT NULL COMMENT '模拟量值',");
+		sb.append("uploadDateTime VARCHAR(30) DEFAULT NULL COMMENT '上报时间',");
+		sb.append("confirmState int(1) DEFAULT 0 COMMENT '告警确认 0-未确认 1-已确认',");
+		sb.append("PRIMARY KEY (`id`), KEY index_device (deviceId)");
+		sb.append(") ENGINE=MYISAM DEFAULT CHARSET=utf8");
+		// Connection con = ContainerUtil.getDataSource().getConnection();
+		Statement stat = con.createStatement();
+		// Statement stat = dataSource.getConnection().createStatement();
+		stat.executeUpdate(sb.toString());
+		stat.close();
+		// con.close();
+	}
+}

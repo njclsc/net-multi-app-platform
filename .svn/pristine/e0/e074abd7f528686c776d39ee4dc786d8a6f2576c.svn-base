@@ -1,0 +1,37 @@
+package bd.nmam.history.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class BusinssOperateConfigure {
+	private static String imageLocation;
+	private static String sourceLoadWay;
+	
+	@Bean
+	public Object loadBean(@Value("${upload.savePath.image}") String imageLocation,
+			@Value("${source.loadWay}") String sourceLoadWay){
+		BusinssOperateConfigure.setImageLocation(imageLocation);
+		BusinssOperateConfigure.setSourceLoadWay(sourceLoadWay);
+		
+		return null;
+	}
+
+	public static String getImageLocation() {
+		return imageLocation;
+	}
+
+	public static String getSourceLoadWay() {
+		return sourceLoadWay;
+	}
+
+	public static void setSourceLoadWay(String sourceLoadWay) {
+		BusinssOperateConfigure.sourceLoadWay = sourceLoadWay;
+	}
+
+	public static void setImageLocation(String imageLocation) {
+		BusinssOperateConfigure.imageLocation = imageLocation;
+	}
+	
+}

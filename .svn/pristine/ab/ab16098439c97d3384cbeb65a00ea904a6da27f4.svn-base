@@ -1,0 +1,12 @@
+package bd.nmam.manager.business.service;
+
+import java.util.List;
+
+import bd.nmam.manager.business.pojo.UserPojo;
+
+public interface IUserManagerService {
+	public String add(UserPojo user);
+	public String remove(UserPojo user);
+	public String modify(UserPojo user);
+	public String find(UserPojo user);
+}

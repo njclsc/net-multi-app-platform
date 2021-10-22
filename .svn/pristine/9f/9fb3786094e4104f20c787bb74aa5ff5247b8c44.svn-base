@@ -1,0 +1,99 @@
+package bd.nmam.collection.util.beidian;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Properties;
+
+import bd.nmam.collection.business.pojo.beidian.UpgradeFileInfoPojo;
+import bd.nmam.collection.business.pojo.beidian.UpgradePojo;
+
+public class UpgradeUtil {
+	//升级临时添加
+		private static HashSet<String> deviceIds = new HashSet<String>();
+		//key = keyId + fileName
+		private static HashMap<String, UpgradePojo> upgradePojos = new HashMap<String, UpgradePojo>();
+		private static HashMap<String, List<byte[]>> binsData = new HashMap<String, List<byte[]>>();
+		private static HashMap<String, UpgradeFileInfoPojo> upgradeFileInfos = new HashMap<String, UpgradeFileInfoPojo>();
+		private static int wayFlag = -1;
+		public static void initUpgradeResource(String resourcePath) throws Exception{
+			Properties p = new Properties();
+			p.load(new FileInputStream(new File(resourcePath + "/upgrade_map.properties")));
+			Enumeration<Object> e = p.keys();
+			while(e.hasMoreElements()){
+				String key = e.nextElement().toString();
+				String fileName = p.getProperty(key);
+				UpgradeUtil.getBinsData().put(key, loadFirmware(resourcePath + "/" + fileName, key));
+			}
+		}
+		public static int getWayFlag() {
+			return wayFlag;
+		}
+		public static void setWayFlag(int wayFlag) {
+			UpgradeUtil.wayFlag = wayFlag;
+		}
+		private static List<byte[]> loadFirmware(String path, String fileKey) throws Exception{
+			FileInputStream fis = new FileInputStream(new File(path));
+			long fileLength = fis.available();
+			long modle = fileLength % 512;
+			long sum = 0;
+			if(modle == 0){
+				sum = fileLength / 512;
+			}else{
+				sum = (fileLength / 512) + 1;
+			}
+			List<byte[]> dd = new ArrayList<byte[]>();
+			for(int i = 0; i < sum; i++){
+				byte[] d = new byte[512];
+				fis.read(d);
+				dd.add(d);
+			}
+			fis.close();
+			UpgradeFileInfoPojo ufip = new UpgradeFileInfoPojo();
+			ufip.setFileType(fileKey);
+			ufip.setFileName(path);
+			ufip.setFileLength(fileLength);
+			UpgradeUtil.upgradeFileInfos.put(fileKey, ufip);
+			return dd;
+		}
+		public static HashMap<String, UpgradePojo> getUpgradePojos() {
+			return upgradePojos;
+		}
+		public static void setUpgradePojos(HashMap<String, UpgradePojo> upgradePojos) {
+			UpgradeUtil.upgradePojos = upgradePojos;
+		}
+		public static HashMap<String, List<byte[]>> getBinsData() {
+			return binsData;
+		}
+
+		public static void setBinsData(HashMap<String, List<byte[]>> binsData) {
+			UpgradeUtil.binsData = binsData;
+		}
+		public static HashMap<String, UpgradeFileInfoPojo> getUpgradeFileInfos() {
+			return upgradeFileInfos;
+		}
+		public static void setUpgradeFileInfos(
+				HashMap<String, UpgradeFileInfoPojo> upgradeFileInfos) {
+			UpgradeUtil.upgradeFileInfos = upgradeFileInfos;
+		}
+		public static HashSet<String> getDeviceIds() {
+			return deviceIds;
+		}
+		public static void setDeviceIds(HashSet<String> deviceIds) {
+			UpgradeUtil.deviceIds = deviceIds;
+		}
+		public static void loadDevice() throws IOException{
+			BufferedReader r = new BufferedReader(new InputStreamReader(LoadConfig.getResourcePath("/tmpDev.txt")));
+			String s = null;
+			while((s = r.readLine()) != null){
+				deviceIds.add(s);
+			}
+		}
+}

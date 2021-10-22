@@ -1,0 +1,18 @@
+package bd.nmam.timely.business.controller;
+
+import java.util.Map;
+
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/a1")
+public class C1 {
+
+	@RequestMapping("/b")
+	public String run(@RequestBody Map<String, String> map){
+		System.out.println("xxx" + map.size() + "    " + map.get("p"));
+		return "阿西吧";
+	}
+}

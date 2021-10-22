@@ -1,0 +1,37 @@
+package bd.nmam.collection.config.channelinitializer;
+
+import bd.nmam.collection.business.coder.beidian.BeidianUDPDecoder;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPAlarmHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPAnalogHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPCacheDisplayHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPCtrlResponseHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPDeviceInfoHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPGPSInfoHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPHeartHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPParamResponseHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPSetHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUDPTimeCalibrationHandler;
+import bd.nmam.collection.business.handler.beidian.BeidianUpgradeHandler;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.socket.SocketChannel;
+
+public class BDUDPChannelinitializer extends ChannelInitializer<SocketChannel>{
+
+	@Override
+	protected void initChannel(SocketChannel arg0) throws Exception {
+		// TODO Auto-generated method stub
+		arg0.pipeline().addLast(new BeidianUDPDecoder());
+		arg0.pipeline().addLast(new BeidianUDPHeartHandler());
+		arg0.pipeline().addLast(new BeidianUDPAlarmHandler());
+		arg0.pipeline().addLast(new BeidianUDPAnalogHandler());
+		arg0.pipeline().addLast(new BeidianUDPTimeCalibrationHandler());
+		arg0.pipeline().addLast(new BeidianUDPSetHandler());
+		arg0.pipeline().addLast(new BeidianUDPParamResponseHandler());
+		arg0.pipeline().addLast(new BeidianUDPCtrlResponseHandler());
+		arg0.pipeline().addLast(new BeidianUDPDeviceInfoHandler());
+		arg0.pipeline().addLast(new BeidianUDPGPSInfoHandler());
+		arg0.pipeline().addLast(new BeidianUpgradeHandler());
+		arg0.pipeline().addLast(new BeidianUDPCacheDisplayHandler());
+	}
+	
+}

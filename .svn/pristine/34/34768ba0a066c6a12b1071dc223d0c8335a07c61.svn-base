@@ -1,0 +1,14 @@
+package bd.nmam.collection.business.handler;
+
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+
+public class TestHandler1 extends ChannelInboundHandlerAdapter{
+
+	@Override
+	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+		// TODO Auto-generated method stub
+		System.out.println(msg);
+	}
+
+}

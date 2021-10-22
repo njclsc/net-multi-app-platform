@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bd.nmam.timely.business.dao.TimelyDataDao">
+	<select id="findDeviceNode" parameterType = "bd.nmam.timely.business.pojo.TreeAreaPojo" resultType = "bd.nmam.timely.business.pojo.TreeAreaPojo">
+		SELECT deviceCode AS _areaCode, dev_id AS _dev_id, devName AS _devName FROM tb_device
+		WHERE deviceCode IN (
+			SELECT deviceCode FROM tb_groupdevicerelation WHERE groupIndex IN (
+				SELECT deviceGroupIndex FROM tb_user_devicegroup
+			WHERE userIndex = 12)
+		) 
+	</select>
+	
+</mapper>

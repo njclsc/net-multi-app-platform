@@ -1,0 +1,37 @@
+package bd.nmam.login.business.serviceimp;
+
+import java.util.Map;
+
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.Subject;
+import org.springframework.stereotype.Service;
+
+import bd.nmam.login.business.service.ILoginService;
+@Service("LoginServiceImp")
+public class LoginServiceImp implements ILoginService{
+	
+	@Override
+	public String loginCheck(Map<String, String> paramMap) {
+		// TODO Auto-generated method stub
+		try{
+			UsernamePasswordToken token = new UsernamePasswordToken(paramMap.get("account"), paramMap.get("password"));
+			Subject subject = SecurityUtils.getSubject();
+			subject.login(token);
+		}catch(UnknownAccountException e){
+			e.printStackTrace();
+		}catch(IncorrectCredentialsException e){
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	@Override
+	public String loginOut(Map<String, String> paramMap) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+}

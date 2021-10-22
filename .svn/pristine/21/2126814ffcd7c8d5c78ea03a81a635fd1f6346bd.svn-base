@@ -1,0 +1,552 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.Socket;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Iterator;
+import java.util.List;
+
+import bd.nmam.collection.business.pojo.beidian.AIPojo;
+import bd.nmam.collection.business.pojo.beidian.AlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.CommandPojo;
+import bd.nmam.collection.business.pojo.beidian.DIPojo;
+import bd.nmam.collection.business.pojo.beidian.DOPojo;
+import bd.nmam.collection.business.pojo.beidian.DeviceCommandPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
+
+public class BeidianReciveCommandForUDP_ReciveTCPCommand implements Runnable{
+	private Socket socket;
+	private String DeviceID;
+	private String infoID;
+	private String ctrlcmd;
+	private String Info;
+	private String SEQ;// 帧序列号
+	private String CmdType;
+	private String CMD;// 设备控制指令
+	private String CheckData;
+	private String CheckSum;
+	private BufferedOutputStream osb;
+	private String CID1;
+	private String SOI = ContainerUtil.SOI;
+	private String EOI = ContainerUtil.EOI;
+	private String SEQFlag = ContainerUtil.getSEQFlag();
+	BeidianReciveCommandForUDP_ReciveTCPCommand(Socket socket){
+		this.socket = socket;
+	}
+	
+	public void run(){
+		try{
+
+			InputStream is = socket.getInputStream();
+			while(true){
+				System.out.println("web 指令接收");
+				Thread.sleep(1000);
+				if(is.available() < 0){
+					socket.close();
+					return;
+				}else{
+					break;
+				}
+			}
+			int len = is.available();
+			byte[] bit = new byte[len];
+			if(len > 0){
+				len = is.read(bit);
+				StringBuffer sb = new StringBuffer();
+				for(int i = 0; i < len; i++){
+					sb.append((char)bit[i]);
+				}
+				System.out.println("web 指令接收：" + sb.toString());
+				JSONObject obj = new JSONObject();
+				JSONObject targetObj = obj.fromObject(sb.toString());
+				CommandPojo cp = new CommandPojo();
+				cp.setPlatformID(targetObj.getString("platformID"));
+				cp.setFrameType(targetObj.getString("frameType"));
+				cp.setDeviceID(targetObj.getString("deviceID"));
+				cp.setFrameTime(targetObj.getString("frameTime"));
+				if(targetObj.getString("frameType").equals("connection")){
+					String status = targetObj.getString("status");
+					status = "0"+status;
+					CMD = ("55AA10"+cp.getDeviceID() + status);
+					//断开处理开始
+					String did = CMD.substring(6, 22);
+					String status1 = CMD.substring(22, 24);
+					Connection con = DatabaseUtil.getDataSource().getConnection();
+					if(status1.equals("01")){
+						Statement stat1 = con.createStatement();
+						String sql1 = "select * from tb_device where deviceId = '" + did + "'";
+						ResultSet rs1 = stat1.executeQuery(sql1);
+						String key = "";
+						while(rs1.next()){
+							key = rs1.getString("ip") + ":" + rs1.getString("port");
+							ContainerUtil.getTcpClientFuture().get(key).close();
+							System.out.println("************111************");
+						}
+						rs1.close();
+						stat1.close();
+						Statement stat = con.createStatement();
+//						String sql = "update tb_device set divideFlag = '" + tmp + "' where deviceId = '" + did + "'";
+						String sql = "update tb_device set divideFlag = '' where deviceId = '" + did + "'";
+						stat.executeUpdate(sql);
+						stat.close();
+//						con.close();
+					}else if(status1.equals("00")){
+						Statement stat = con.createStatement();
+						String sql = "update tb_device set divideFlag = '"+ "0" + "' where deviceId = '" + did + "'";
+						stat.executeUpdate(sql);
+						stat.close();
+//						con.close();
+					}
+					con.close();
+					System.out.println("断开指令下发...."+CMD);
+				}else if(targetObj.getString("frameType").equals("expiryAlarm")){//AED效期告警获取，存入缓存 by seifer 20210104
+					String signalId = targetObj.getString("alarmID");
+					String alarmStatus = targetObj.getString("alarmState");
+					String deviceId = targetObj.getString("deviceID");
+					DevicePojo dp = ContainerUtil.getDevices().get(deviceId);
+					AlarmPojo ap = new AlarmPojo();
+					ap.setSignalId(signalId);
+					ap.setAlarmStatus(Integer.parseInt(alarmStatus));
+//					ap.setSwitchStatus(Integer.parseInt(switchState[i], 16));
+					ap.setUploadTime(System.currentTimeMillis());
+					ap.setTypeFlag("custom");
+					ContainerUtil.refreshPreSet(dp, ap);
+					ContainerUtil.refreshState(dp);
+				}else if(targetObj.getString("frameType").equals("ctrl")){
+				
+					if(targetObj.containsKey("DO")){
+						cp.setCtrlCount(targetObj.getString("ctrlCount"));
+						JSONArray obj1 = JSONArray.fromObject(targetObj.getString("DO"));
+						DOPojo ddoo = new DOPojo();
+						ddoo.setInfoID(JSONObject.fromObject(obj1.get(0)).getString("infoID"));
+						ddoo.setCtrlcmd(JSONObject.fromObject(obj1.get(0)).getString("ctrlcmd"));
+						cp.setDO(ddoo);
+						CMD = controlCMD(cp);
+						System.out.println("控制下发指令:"+CMD);
+					}
+				}else if(targetObj.getString("frameType").equals("set_di")){
+					if(targetObj.containsKey("DI")){
+						cp.setCtrlCount(targetObj.getString("setCount"));
+						JSONArray obj1 = JSONArray.fromObject(targetObj.getString("DI"));
+						DIPojo dipj = new DIPojo();
+						dipj.setAlarmID(JSONObject.fromObject(obj1.get(0)).getString("alarmID"));
+						dipj.setChAttr(JSONObject.fromObject(obj1.get(0)).getString("chAttr"));
+						dipj.setChNum(JSONObject.fromObject(obj1.get(0)).getString("chNum"));
+						dipj.setChSta(JSONObject.fromObject(obj1.get(0)).getString("chSta"));
+						dipj.setDataID(JSONObject.fromObject(obj1.get(0)).getString("dataID"));
+						dipj.setReserved(JSONObject.fromObject(obj1.get(0)).getString("reserved"));
+						cp.setDI(dipj);
+						CMD = DICMD(cp);
+						System.out.println("DI配置下发指令:"+CMD);
+					}
+				}else if(targetObj.getString("frameType").equals("set_ai")){
+					if(targetObj.containsKey("AI")){
+						cp.setCtrlCount(targetObj.getString("setCount"));
+						JSONArray obj1 = JSONArray.fromObject(targetObj.getString("AI"));
+						AIPojo aipj = new AIPojo();
+						aipj.setAcOne(JSONObject.fromObject(obj1.get(0)).getString("acOne"));
+						aipj.setAcTwo(JSONObject.fromObject(obj1.get(0)).getString("acTwo"));
+						aipj.setAlmDnLim(JSONObject.fromObject(obj1.get(0)).getString("almDnLim"));
+						aipj.setAlmRtn(JSONObject.fromObject(obj1.get(0)).getString("almRtn"));
+						aipj.setAlmUpLim(JSONObject.fromObject(obj1.get(0)).getString("almUpLim"));
+						aipj.setCalParm(JSONObject.fromObject(obj1.get(0)).getString("calParm"));
+						aipj.setChAttr(JSONObject.fromObject(obj1.get(0)).getString("chAttr"));
+						aipj.setChNum(JSONObject.fromObject(obj1.get(0)).getString("chNum"));
+						aipj.setChSta(JSONObject.fromObject(obj1.get(0)).getString("chSta"));
+						aipj.setDataID(JSONObject.fromObject(obj1.get(0)).getString("dataID"));
+						aipj.setDnLimID(JSONObject.fromObject(obj1.get(0)).getString("dnLimID"));
+						aipj.setDnLimMask(JSONObject.fromObject(obj1.get(0)).getString("dnLimMask"));
+						aipj.setFaultID(JSONObject.fromObject(obj1.get(0)).getString("faultID"));
+						aipj.setFaultMask(JSONObject.fromObject(obj1.get(0)).getString("faultMask"));
+						aipj.setJumpID(JSONObject.fromObject(obj1.get(0)).getString("jumpID"));
+						aipj.setJumpMask(JSONObject.fromObject(obj1.get(0)).getString("jumpMask"));
+						aipj.setJumpParm(JSONObject.fromObject(obj1.get(0)).getString("jumpParm"));
+						aipj.setSvOne(JSONObject.fromObject(obj1.get(0)).getString("svOne"));
+						aipj.setSvTwo(JSONObject.fromObject(obj1.get(0)).getString("svTwo"));
+						aipj.setUpLimID(JSONObject.fromObject(obj1.get(0)).getString("upLimID"));
+						aipj.setUpLimMask(JSONObject.fromObject(obj1.get(0)).getString("upLimMask"));
+						cp.setAI(aipj);
+						CMD = AICMD(cp);
+						System.out.println("AI配置下发指令:"+CMD);
+					}
+				}else if(targetObj.getString("frameType").equals("get_ai")){
+					if(targetObj.containsKey("AI")){
+						cp.setCtrlCount(targetObj.getString("setCount"));
+						JSONArray obj1 = JSONArray.fromObject(targetObj.getString("AI"));
+						AIPojo aipj = new AIPojo();
+						//ConfigPojo cfgp = new ConfigPojo();
+						//cfgp.setChNum(JSONObject.fromObject(obj1.get(0)).getString("chNum"));
+						aipj.setChNum(JSONObject.fromObject(obj1.get(0)).getString("chNum"));
+						cp.setAI(aipj);
+						CMD = ConfigAICMD(cp);
+						System.out.println("AI参数获取下发指令:"+CMD);
+					}
+				}else if(targetObj.getString("frameType").equals("get_di")){
+					if(targetObj.containsKey("DI")){
+						cp.setCtrlCount(targetObj.getString("setCount"));
+						JSONArray obj1 = JSONArray.fromObject(targetObj.getString("DI"));
+						DIPojo dipj = new DIPojo();
+						dipj.setChNum(JSONObject.fromObject(obj1.get(0)).getString("chNum"));
+						cp.setDI(dipj);
+						CMD = ConfigDICMD(cp);
+						System.out.println("DI参数获取下发指令:"+CMD);
+					}
+				}else if(targetObj.getString("frameType").equals("get_data")){
+					CMD = dataGetCMD(cp);
+					System.out.println("状态数据获取下发指令:"+CMD);
+				}else if(targetObj.getString("frameType").equals("dev_cache")){
+					if(targetObj.getString("status").equals("1")){
+						ContainerUtil.getDevices().remove(cp.getDeviceID());
+						ContainerUtil.getDeviceCommBuf().remove(cp.getDeviceID());
+						System.out.println("设备删除   :" + cp.getDeviceID());
+					}else if(targetObj.getString("status").equals("0")){
+						String sql = "select * from tb_aed_outdevice where deviceId = '" + cp.getDeviceID() + "'";
+						Connection con = DatabaseUtil.getDataSource().getConnection();
+						Statement stat = con.createStatement();
+						ResultSet rs = stat.executeQuery(sql);
+						while(rs.next()){
+							int id = rs.getInt("id");
+							String deviceId = rs.getString("deviceId");
+							String localIp = rs.getString("ip");
+							int localPort = rs.getInt("port");
+							String targetIp = rs.getString("ipForward");
+							int targetPort = rs.getInt("portForward");
+							String devType = deviceId.substring(4, 6);
+							//AED设备数据库state与缓存状态相反  by seifer 200326
+							String state = rs.getString("state");
+							String offlineAlarmState = null;
+							//state状态替换，设备离线状态标志位初始化
+							if(state.equalsIgnoreCase("0")){
+								state ="1";
+								offlineAlarmState = "0";
+							}else if(state.equalsIgnoreCase("1")){
+								state = "0";
+								offlineAlarmState = "1";
+							}else if(state.equalsIgnoreCase("2")){
+								state = "2";
+								offlineAlarmState = "0";
+							}
+							if(devType.equalsIgnoreCase("88")){
+								DevicePojo dp = new DevicePojo();
+								dp.setId(id);
+								dp.setDeviceId(deviceId);
+								dp.setIp(localIp);
+								dp.setPort(localPort);
+								dp.setTargetIp(targetIp);
+								dp.setTargetPort(targetPort);
+								dp.setState(state);
+								dp.setOfflineAlarmState(offlineAlarmState);
+								ContainerUtil.getDevices().put(deviceId, dp);
+								//临时增加，配合测试 by seifer 200628
+								System.out.println("AED deviceID: "+deviceId);
+								//增加命令下发设备缓存 by seifer 200605
+								DeviceCommandPojo dcp = new DeviceCommandPojo();
+								dcp.setDeviceId(deviceId);
+								ContainerUtil.getDeviceCommBuf().put(deviceId, dcp);
+							}
+						}
+						rs.close();
+						stat.close();
+						con.close();
+					}
+					
+				}
+				//ContainerUtil.getDeviceCommBuf().get(targetObj.getString("deviceID")).setCp(cp);
+				//DevicePojo dp = ContainerUtil.getDevices().get(targetObj.get("deviceID"));
+				DeviceCommandPojo dcp = ContainerUtil.getDeviceCommBuf().get(targetObj.getString("deviceID"));
+//				dcp.setCMD(CMD);
+//				dcp.setIssueFlag(1);
+				//======================================================
+				if(dcp!=null&&CMD!=null){
+					int idx = dcp.get_CMD().size() % ContainerUtil.get_cmd2DeviceBufSize();
+					dcp.get_CMD().add(idx, CMD);
+					dcp.get_INDEX().add(idx, SEQ + "#0#0#nul");
+//					System.out.println(dcp.get_CMD().size() + "  +++++  " + (ContainerUtil.get_cmd2DeviceBufSize()));
+					if(dcp.get_CMD().size() > ContainerUtil.get_cmd2DeviceBufSize()){
+						List<String> cmds = dcp.get_CMD();
+						List<String> index = dcp.get_INDEX();
+						Iterator<String> itr1 = cmds.iterator();
+						Iterator<String> itr2 = index.iterator();
+						int _index = 0;
+						while(itr1.hasNext()){
+							itr1.next();
+							itr2.next();
+							if(_index > ContainerUtil.get_cmd2DeviceBufSize() - 1){
+								itr1.remove();
+								itr2.remove();
+							}
+							_index += 1;
+						}
+					}
+					
+				//======================================================
+					System.out.println("UDP下发指令放入设备指令缓存");
+				}
+			}
+			
+			System.out.println(socket.isConnected() + "  --**- " + socket.isClosed());
+			Thread.sleep(1000);
+			System.out.println("111111111111111");
+//			System.out.println("after close:" + socket.isClosed());
+		
+		}catch(Exception e){
+			e.printStackTrace();
+		}finally{
+			try {
+				System.out.println("22222222222");
+//				osb.close();
+				socket.shutdownInput();
+				socket.shutdownOutput();
+				socket.close();
+				System.out.println(socket.isConnected() + "  --**- " + socket.isClosed());
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+				
+			}
+		}
+	}
+	
+	private String dataGetCMD(CommandPojo cp) {
+		// TODO Auto-generated method stub
+		DeviceID =cp.getDeviceID();
+		CID1 = DeviceID.substring(4,6);
+//		SEQ = "0000";
+		SEQ = ContainerUtil.createSEQ(DeviceID);
+//		if(SEQFlag.equalsIgnoreCase("0")){
+//			SEQ = "0000";
+//			ContainerUtil.setSEQFlag("1");
+//		}else{
+//			SEQ = "0001";
+//			ContainerUtil.setSEQFlag("0");
+//		}
+		CmdType = "00";
+		Info = CmdType + DeviceID;
+		CheckData = "1001"+CID1+"1B7009"+ Info+ SEQ;
+		byte[] Data = ContainerUtil.hexStrToBytes(CheckData);
+		CheckSum = ContainerUtil.checksum(Data);
+		CMD = SOI + CheckData + CheckSum + EOI;
+		return CMD;
+	}
+	private String ConfigAICMD(CommandPojo cp){
+		DeviceID = cp.getDeviceID();
+		CID1 = DeviceID.substring(4,6);
+		String chNum = cp.getAI().getChNum();
+		int result = Integer.parseInt(chNum);
+		chNum =ContainerUtil.algorismToHEXString(result);
+//		SEQ = "0000";
+		SEQ = ContainerUtil.createSEQ(DeviceID);
+//		if(SEQFlag.equalsIgnoreCase("0")){
+//			SEQ = "0000";
+//			ContainerUtil.setSEQFlag("1");
+//		}else{
+//			SEQ = "0001";
+//			ContainerUtil.setSEQFlag("0");
+//		}
+		CmdType = "01";
+		//通道号
+		String tdh = "000000"+chNum;
+		Info = CmdType + DeviceID + tdh;
+		CheckData = "1001"+CID1+"0E300D"+ Info+ SEQ;
+		byte[] Data = ContainerUtil.hexStrToBytes(CheckData);
+		CheckSum = ContainerUtil.checksum(Data);
+		CMD = SOI + CheckData + CheckSum + EOI;
+		return CMD;
+		
+	}
+	
+	private String ConfigDICMD(CommandPojo cp){
+		DeviceID = cp.getDeviceID();
+		CID1 = DeviceID.substring(4,6);
+		String chNum = cp.getDI().getChNum();
+		int result = Integer.parseInt(chNum);
+		chNum =ContainerUtil.algorismToHEXString(result);
+//		SEQ = "0001";
+		SEQ = ContainerUtil.createSEQ(DeviceID);
+//		if(SEQFlag.equalsIgnoreCase("0")){
+//			SEQ = "0000";
+//			ContainerUtil.setSEQFlag("1");
+//		}else{
+//			SEQ = "0001";
+//			ContainerUtil.setSEQFlag("0");
+//		}
+		CmdType = "01";
+		//通道号
+		String tdh = "000000"+chNum;
+		Info = CmdType + DeviceID + tdh;
+		CheckData = "1001"+CID1+"0E300D"+ Info+ SEQ;
+		byte[] Data = ContainerUtil.hexStrToBytes(CheckData);
+		CheckSum = ContainerUtil.checksum(Data);
+		CMD = SOI + CheckData + CheckSum + EOI;
+		return CMD;
+		
+	}
+	
+	private String AICMD(CommandPojo cp) {
+		// TODO Auto-generated method stub
+		DeviceID = cp.getDeviceID();
+		CID1 = DeviceID.substring(4,6);
+		String chNum = cp.getAI().getChNum();
+		int result = Integer.parseInt(chNum);
+		chNum =ContainerUtil.algorismToHEXString(result);
+		String chSta = cp.getAI().getChSta();
+		switch(chSta){
+		case"EN":chSta = "01";break;
+		case"DIS":chSta = "00";break;
+		}
+		String chAttr = cp.getAI().getChAttr();
+		switch(chAttr){
+		case"V":chAttr = "00";break;
+		case"C":chAttr = "01";break;
+		case"D":chAttr = "02";break;
+		case"O":chAttr = "03";break;
+		}
+		String svOne = cp.getAI().getSvOne();
+		svOne = ContainerUtil.floatToString(svOne);
+		
+		String acOne = cp.getAI().getAcOne();
+		acOne = ContainerUtil.floatToString(acOne);
+		
+		String svTwo = cp.getAI().getSvTwo();
+		svTwo = ContainerUtil.floatToString(svTwo);
+		
+		String acTwo = cp.getAI().getAcTwo();
+		acTwo = ContainerUtil.floatToString(acTwo);
+		
+		String almUpLim = cp.getAI().getAlmUpLim();
+		almUpLim = ContainerUtil.floatToString(almUpLim);
+		
+		String almDnLim = cp.getAI().getAlmDnLim();
+		almDnLim = ContainerUtil.floatToString(almDnLim);
+		
+		String almRtn = cp.getAI().getAlmRtn();
+		almRtn = ContainerUtil.floatToString(almRtn);
+		
+		String jumpParm = cp.getAI().getJumpParm();
+		jumpParm = ContainerUtil.floatToString(jumpParm);
+		
+		String calParm = cp.getAI().getCalParm();
+		calParm = ContainerUtil.floatToString(calParm);
+		
+		String dataID = cp.getAI().getDataID();
+		String upLimID = cp.getAI().getUpLimID();
+		String dnLimID = cp.getAI().getDnLimID();
+		String faultID = cp.getAI().getFaultID();
+		String jumpID = cp.getAI().getJumpID();
+		String upLimMask = cp.getAI().getUpLimMask();
+		String dnLimMask = cp.getAI().getDnLimMask();
+		String faultMask = cp.getAI().getFaultMask();
+		String jumpMask = cp.getAI().getJumpMask();
+//		SEQ = "0000";
+		SEQ = ContainerUtil.createSEQ(DeviceID);
+//		if(SEQFlag.equalsIgnoreCase("0")){
+//			SEQ = "0000";
+//			ContainerUtil.setSEQFlag("1");
+//		}else{
+//			SEQ = "0001";
+//			ContainerUtil.setSEQFlag("0");
+//		}
+		CmdType = "01";
+		//通道号
+		String tdh = "000000"+chNum;
+		//通道参数
+		String AIStruct = chNum+chSta + chAttr + svOne + acOne + svTwo + acTwo + almUpLim + almDnLim 
+				+ almRtn + jumpParm + calParm + dataID + upLimID + dnLimID + faultID + jumpID 
+				+ upLimMask + dnLimMask + faultMask + jumpMask;
+		AIStruct = ContainerUtil.cfgchkSum(AIStruct) + AIStruct;
+		Info = CmdType + DeviceID + tdh + AIStruct;
+		CheckData = "1001"+CID1+"0DF04D"+ Info+ SEQ;
+		byte[] Data = ContainerUtil.hexStrToBytes(CheckData);
+		CheckSum = ContainerUtil.checksum(Data);
+		CMD = SOI + CheckData + CheckSum + EOI;
+		return CMD;
+	}
+	private String DICMD(CommandPojo cp) {
+		// TODO Auto-generated method stub
+		DeviceID = cp.getDeviceID();
+		CID1 = DeviceID.substring(4,6);
+		String alarmID = cp.getDI().getAlarmID();
+		String chAttr = cp.getDI().getChAttr();
+		String chNum = cp.getDI().getChNum();
+		int result = Integer.parseInt(chNum);
+		chNum =ContainerUtil.algorismToHEXString(result);
+		String chSta = cp.getDI().getChSta();
+		String dataID = cp.getDI().getDataID();
+		switch(chSta){
+		case"EN":chSta = "01";break;
+		case"DIS":chSta = "00";break;
+		}
+		switch(chAttr){
+		case"L":chAttr = "00";break;
+		case"H":chAttr = "01";break;
+		case"M":chAttr = "02";break;
+		}
+//		SEQ = "0000";
+		SEQ = ContainerUtil.createSEQ(DeviceID);
+//		if(SEQFlag.equalsIgnoreCase("0")){
+//			SEQ = "0000";
+//			ContainerUtil.setSEQFlag("1");
+//		}else{
+//			SEQ = "0001";
+//			ContainerUtil.setSEQFlag("0");
+//		}
+		CmdType = "01";
+		//信号ID/通道号
+		String tdh = "000000"+chNum;
+		//通道参数
+		String DIStruct = chNum + chSta + chAttr + dataID + alarmID+"00000000";
+		DIStruct = ContainerUtil.cfgchkSum(DIStruct) + DIStruct;
+		Info = CmdType + DeviceID + tdh + DIStruct;
+		CheckData = "1001"+CID1+"0D201D"+ Info+ SEQ;
+		byte[] Data = ContainerUtil.hexStrToBytes(CheckData);
+		CheckSum = ContainerUtil.checksum(Data);
+		CMD = SOI + CheckData + CheckSum + EOI;
+		return CMD;
+	}
+	private String controlCMD(CommandPojo cp) {
+		// TODO Auto-generated method stub
+		DeviceID = cp.getDeviceID();
+		CID1 = DeviceID.substring(4,6);
+		infoID = cp.getDO().getInfoID();
+		ctrlcmd = cp.getDO().getCtrlcmd();
+		switch(ctrlcmd){
+		case "LOW":ctrlcmd="00";break;
+		case "HIGH":ctrlcmd ="01";break;
+		case "AUTO":ctrlcmd ="02";break;
+		case "MASK":ctrlcmd ="03";break;
+		case "RST":ctrlcmd ="04";break;
+		case "PWM":ctrlcmd ="05";break;
+		}
+		SEQ = ContainerUtil.createSEQ(DeviceID);
+//		if(SEQFlag.equalsIgnoreCase("0")){
+//			SEQ = "0000";
+//			ContainerUtil.setSEQFlag("1");
+//		}else{
+//			SEQ = "0001";
+//			ContainerUtil.setSEQFlag("0");
+//		}
+		CmdType = "01";
+		Info = CmdType + DeviceID + infoID + ctrlcmd;
+		CheckData = "1001"+CID1+"0C200E"+ Info+ SEQ;
+		byte[] Data = ContainerUtil.hexStrToBytes(CheckData);
+		CheckSum = ContainerUtil.checksum(Data);
+		CMD = SOI + CheckData + CheckSum + EOI;
+		return CMD;
+		
+	}
+	private byte[] toBytes(String data){
+		byte[] bits = new byte[data.length() / 2];
+		for(int i = 0; i < data.length() / 2; i++){
+			bits[i] = (byte)Integer.parseInt(data.substring(i * 2, i * 2 + 2), 16);
+		}
+		return bits;
+	}
+}

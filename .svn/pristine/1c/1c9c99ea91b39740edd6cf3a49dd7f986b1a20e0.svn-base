@@ -1,0 +1,1896 @@
+package bd.nmam.collection.util.beidian;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.DatagramSocket;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.context.annotation.Configuration;
+
+import bd.nmam.collection.business.pojo.beidian.LogPojo;
+import bd.nmam.collection.business.pojo.beidian.AgainPowerOnAlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.AlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.AlarmPreSetPojo;
+import bd.nmam.collection.business.pojo.beidian.DeviceCommandPojo;
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.business.pojo.beidian.ParamPojo;
+import bd.nmam.collection.business.pojo.beidian.SpellPojo;
+import bd.nmam.collection.business.pojo.beidian.TheTimlyAlarmPojo;
+import bd.nmam.collection.business.pojo.beidian.Upload;
+import io.netty.channel.Channel;
+import sun.misc.BASE64Decoder;
+@Configuration
+public class ContainerUtil {
+    private static DiscoveryClient discoveryClient;
+	//接收命令serversocket
+		private static ServerSocket serverSocket;
+		private static int configFlag = 0;
+		private static DatagramSocket ds;
+//		private static Logger loggerPrint;
+//		private static Logger loggerWrite;
+		private static long alarm_fire_time;
+		private static long alarm_accpet_time;
+		private static HashMap<String, Channel> tcpClientFuture = new HashMap<String, Channel>();
+		private static HashMap<String, Channel> udpClientFuture = new HashMap<String, Channel>();
+		public static final int CID2_ForwardControlAnswer = 140;// 8C
+		public static final int CID2_ForwardAlarmAnswer = 137;// 89
+		public static final int CID2_ForwardAlarmReport = 9;// 09
+		public static String CID2_ForwardHeartBeatAnswer = "84";// 84
+		public static String CID2_ForwardHeartBeatReport = "04";// 04
+		public static final int CID2_ForwardAnalogAnswer = 134;// 86
+		public static final int CID2_ForwardAnalogReport = 6;// 06
+		public static final int CID2_ForwardSwitchAnswer = 135;// 87
+		public static final int CID2_ForwardSwitchReport = 7;// 07
+		public static final int CID2_ForwardSwitchAnalogReport = 27;// 1B
+		public static final int CID2_ForwardSwitchAnalogAnswer = 155;// 9B
+		public static String CID2_TimeCalibrationAnswer = "93";// 93
+		public static String CID2_TimeCalibrationReport = "13";// 13
+		public static final int CID2_ForwardAlarmPreset = 28;// 1C
+		public static String CID2_ForwardParamAnswer = "90";
+		public static final int CID2_ConfigParamAnswer = 142;// 8E
+		private static CloseableHttpClient httpClient;
+		private static List<String> httpUrl;
+		private static String responseUrl;
+		private static List<String> shieldAlarm;
+		public static SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
+		private static SimpleDateFormat sdfTable = new SimpleDateFormat("yyyy_MM");
+		private static SimpleDateFormat sdfStand = new SimpleDateFormat(
+				"yyyy-MM-dd HH:mm:ss"); 
+		private static HashMap<String, DevicePojo> devices = new HashMap<String, DevicePojo>();
+		//心跳帧的固件版本号
+		private static HashMap<String,String> devVers = new HashMap<String,String>();
+		private static ReentrantLock reentrantLock = new ReentrantLock();
+		private static long delay;
+		private static long excuteRate;
+		private static final String H = "7E";
+		private static final String E = "0D";
+		private static final String M2 = "7009";
+		private static HashMap<String, AgainPowerOnAlarmPojo> apoa = new HashMap<String, AgainPowerOnAlarmPojo>();
+		// alarm push
+		private static int pushFlag = 1;
+		private static List<AlarmPojo> push1 = new ArrayList<AlarmPojo>();
+		private static List<AlarmPojo> push2 = new ArrayList<AlarmPojo>();
+		//江西项目
+//		private static HashMap<String, JXDevicePojo> JXdevices = new HashMap<String, JXDevicePojo>();
+//		private static HashMap<String, JXTimlyAlarmPojo> JXtimlyBuf = new HashMap<String,JXTimlyAlarmPojo>();
+//		private static List<JXAlarmPojo> JXPush1 = new ArrayList<JXAlarmPojo>();
+//		private static List<JXAlarmPojo> JXPush2 = new ArrayList<JXAlarmPojo>();
+		//江西项目摄像头设备绑定缓存
+//		private static HashMap<String,String> cameraBandbuf = new HashMap<String,String>();
+		//江西项目门禁设备推送数据缓存
+//		private static List<ACSDataPojo> ACSDataBuf1 = new ArrayList<ACSDataPojo>();
+//		private static List<ACSDataPojo> ACSDataBuf2 = new ArrayList<ACSDataPojo>();
+//		private static int ACSDataFlag = 1;
+		//江西项目硬件设备人脸推送数据
+//		private static List<FaceDataPojo> FaceDataBuf1 = new ArrayList<FaceDataPojo>();
+//		private static List<FaceDataPojo> FaceDataBuf2 = new ArrayList<FaceDataPojo>();
+//		private static int FaceDataFlag = 1;
+		
+//		private static List<FaceModePojo> FaceModeBuf1 = new ArrayList<FaceModePojo>();
+//		private static List<FaceModePojo> FaceModeBuf2 = new ArrayList<FaceModePojo>();
+//		private static int FaceModeFlag = 1;
+		// 实时数据告警缓存
+		public static HashMap<String, TheTimlyAlarmPojo> timlyAlarmBuf = new HashMap<String, TheTimlyAlarmPojo>();
+		// 设备通道参数缓存
+		public static HashMap<String,ParamPojo> timlyParamBuf = new HashMap<String,ParamPojo>();
+		private static long offlineFlag = 0L;
+		private static int uploadFlag = 1;
+		private static List<Upload> up1 = new ArrayList<Upload>();
+		private static List<Upload> up2 = new ArrayList<Upload>();
+		public static String SOI = "7E";
+		public static String EOI = "0D";
+		// 设备指令缓存
+		private static HashMap<String, DeviceCommandPojo> deviceCommBuf = new HashMap<String, DeviceCommandPojo>();
+		//中间件标识位
+		private static String midFlag = "0";
+		//多采集器功能，IP和port缓存记录
+		public static List<String> ips = new ArrayList<String>();
+		public static List<String> ports = new ArrayList<String>();
+		//SEQ标志位
+		public static String SEQFlag = "0";
+		//配置缓存
+		private static HashMap<String, String> communicationConfig;
+		//tcp客户端数据拼接
+		private static HashMap<String, SpellPojo> spellBuf = new HashMap<String, SpellPojo>();
+		//指令缓存数
+		private static int _cmd2DeviceBufSize;
+		private static long _interfal;
+		
+		@Autowired
+		public void clientBuild(DiscoveryClient discoveryClient){
+			System.out.println("--------->>>***");
+			ContainerUtil.setDiscoveryClient(discoveryClient);
+			System.out.println("--------->>>***" + ContainerUtil.getDiscoveryClient());
+		}
+		//######################江西零时###############################
+//		private static HashMap<String, String> deviceTransBuf = new HashMap<String, String>();
+//		private static HashMap<String, String> singleTransBuf = new HashMap<String, String>();
+//		private static HashMap<String, String> gIDsBuf = new HashMap<String, String>();
+//		private static HashMap<String, String> alarmLVBuf = new HashMap<String,String>();
+		//#####################################################
+		//江西项目硬件上报时间格式转换
+//		public static String dateTrans(String oldFormat, String newFormat, String date) throws Exception{
+//			  return new SimpleDateFormat(newFormat).format(new SimpleDateFormat(oldFormat).parse(date));
+//			 }
+//		
+//		public static void loadAlarmLV(Connection connection) throws Exception{
+//			String sql = "select * from alarmdictionaries";
+//			Statement stat = connection.createStatement();
+//			ResultSet rs = stat.executeQuery(sql);
+//			while(rs.next()){
+//				String signalID = rs.getString("signalID");
+//				String alarmLV = rs.getString("alarmLV");
+////				String DEVICE_DEVICEID = rs.getString("DEVICE_DEVICEID");
+//				//当alarmlv在数据字典中不为null且不为空，放入缓存
+//				if(alarmLV!=null && alarmLV!=""){
+//					ContainerUtil.alarmLVBuf.put(signalID, alarmLV);
+//				}
+//			}
+//			rs.close();
+//			stat.close();
+//			connection.close();
+//		}
+//		public static List<JXAlarmPojo> getJXPush1() {
+//			return JXPush1;
+//		}
+	//
+//		public static void setJXPush1(List<JXAlarmPojo> jXPush1) {
+//			JXPush1 = jXPush1;
+//		}
+	//
+//		public static List<JXAlarmPojo> getJXPush2() {
+//			return JXPush2;
+//		}
+	//
+//		public static void setJXPush2(List<JXAlarmPojo> jXPush2) {
+//			JXPush2 = jXPush2;
+//		}
+		
+		public static String createSEQ(String deviceId){
+			DeviceCommandPojo dcp = ContainerUtil.getDeviceCommBuf().get(deviceId);
+			int tmp = (dcp.getBaseSEQ() + 1) % 9999;
+			dcp.setBaseSEQ(tmp);
+			switch(("" + tmp).length()){
+				case 1:
+					return "000" + tmp;
+				case 2:
+					return "00" + tmp;
+				case 3:
+					return "0" + tmp;
+				case 4:
+					return "" + tmp;
+				default:
+					return "";
+			}
+		}
+		
+//		public static HashMap<String, String> getAlarmLVBuf() {
+//			return alarmLVBuf;
+//		}
+//
+//		public static void setAlarmLVBuf(HashMap<String, String> alarmLVBuf) {
+//			ContainerUtil.alarmLVBuf = alarmLVBuf;
+//		}
+
+public static DiscoveryClient getDiscoveryClient() {
+			return discoveryClient;
+		}
+
+		public static void setDiscoveryClient(DiscoveryClient discoveryClient) {
+			ContainerUtil.discoveryClient = discoveryClient;
+		}
+
+		//		public static HashMap<String, String> getgIDsBuf() {
+//			return gIDsBuf;
+//		}
+//
+//		public static void setgIDsBuf(HashMap<String, String> gIDsBuf) {
+//			ContainerUtil.gIDsBuf = gIDsBuf;
+//		}
+//
+//		public static List<FaceModePojo> getFaceModeBuf1() {
+//			return FaceModeBuf1;
+//		}
+//
+//		public static void setFaceModeBuf1(List<FaceModePojo> faceModeBuf1) {
+//			FaceModeBuf1 = faceModeBuf1;
+//		}
+//
+//		public static List<FaceModePojo> getFaceModeBuf2() {
+//			return FaceModeBuf2;
+//		}
+//
+//		public static void setFaceModeBuf2(List<FaceModePojo> faceModeBuf2) {
+//			FaceModeBuf2 = faceModeBuf2;
+//		}
+//
+//		public static int getFaceModeFlag() {
+//			return FaceModeFlag;
+//		}
+//
+//		public static void setFaceModeFlag(int faceModeFlag) {
+//			FaceModeFlag = faceModeFlag;
+//		}
+//
+//		public static List<FaceDataPojo> getFaceDataBuf1() {
+//			return FaceDataBuf1;
+//		}
+//		public static void setFaceDataBuf1(List<FaceDataPojo> faceDataBuf1) {
+//			FaceDataBuf1 = faceDataBuf1;
+//		}
+//		public static List<FaceDataPojo> getFaceDataBuf2() {
+//			return FaceDataBuf2;
+//		}
+//		public static void setFaceDataBuf2(List<FaceDataPojo> faceDataBuf2) {
+//			FaceDataBuf2 = faceDataBuf2;
+//		}
+//		public static int getFaceDataFlag() {
+//			return FaceDataFlag;
+//		}
+//		public static void setFaceDataFlag(int faceDataFlag) {
+//			FaceDataFlag = faceDataFlag;
+//		}
+		public static HashMap<String, ParamPojo> getTimlyParamBuf() {
+			return timlyParamBuf;
+		}
+
+		public static void setTimlyParamBuf(HashMap<String, ParamPojo> timlyParamBuf) {
+			ContainerUtil.timlyParamBuf = timlyParamBuf;
+		}
+
+		public static int get_cmd2DeviceBufSize() {
+			return _cmd2DeviceBufSize;
+		}
+
+		public static long get_interfal() {
+			return _interfal;
+		}
+
+		public static void set_interfal(long _interfal) {
+			ContainerUtil._interfal = _interfal;
+		}
+
+		public static void set_cmd2DeviceBufSize(int _cmd2DeviceBufSize) {
+			ContainerUtil._cmd2DeviceBufSize = _cmd2DeviceBufSize;
+		}
+
+//		public static HashMap<String, JXTimlyAlarmPojo> getJXtimlyBuf() {
+//			return JXtimlyBuf;
+//		}
+//
+//		public static void setJXtimlyBuf(HashMap<String, JXTimlyAlarmPojo> jXtimlyBuf) {
+//			JXtimlyBuf = jXtimlyBuf;
+//		}
+//
+//		public static HashMap<String, JXDevicePojo> getJXdevices() {
+//			return JXdevices;
+//		}
+//
+//		public static void setJXdevices(HashMap<String, JXDevicePojo> jXdevices) {
+//			JXdevices = jXdevices;
+//		}
+//
+//
+//		public static HashMap<String, String> getCameraBandbuf() {
+//			return cameraBandbuf;
+//		}
+
+		public static ServerSocket getServerSocket() {
+			return serverSocket;
+		}
+
+		public static void setServerSocket(ServerSocket serverSocket) {
+			ContainerUtil.serverSocket = serverSocket;
+		}
+
+//		public static void setCameraBandbuf(HashMap<String, String> cameraBandbuf) {
+//			ContainerUtil.cameraBandbuf = cameraBandbuf;
+//		}
+//
+//		public static List<ACSDataPojo> getACSDataBuf1() {
+//			return ACSDataBuf1;
+//		}
+//
+//		public static void setACSDataBuf1(List<ACSDataPojo> aCSDataBuf1) {
+//			ACSDataBuf1 = aCSDataBuf1;
+//		}
+//
+//		public static List<ACSDataPojo> getACSDataBuf2() {
+//			return ACSDataBuf2;
+//		}
+//
+//		public static void setACSDataBuf2(List<ACSDataPojo> aCSDataBuf2) {
+//			ACSDataBuf2 = aCSDataBuf2;
+//		}
+//
+//		public static int getACSDataFlag() {
+//			return ACSDataFlag;
+//		}
+//
+//		public static void setACSDataFlag(int aCSDataFlag) {
+//			ACSDataFlag = aCSDataFlag;
+//		}
+
+		public static HashMap<String, SpellPojo> getSpellBuf() {
+			return spellBuf;
+		}
+
+		public static void setSpellBuf(HashMap<String, SpellPojo> spellBuf) {
+			ContainerUtil.spellBuf = spellBuf;
+		}
+
+		public static String getSEQFlag() {
+			return SEQFlag;
+		}
+
+		public static void setSEQFlag(String sEQFlag) {
+			SEQFlag = sEQFlag;
+		}
+
+		public static List<String> getIps() {
+			return ips;
+		}
+
+		public static void setIps(List<String> ips) {
+			ContainerUtil.ips = ips;
+		}
+
+		public static List<String> getPorts() {
+			return ports;
+		}
+
+		public static void setPorts(List<String> ports) {
+			ContainerUtil.ports = ports;
+		}
+
+		public static List<String> getShieldAlarm() {
+			return shieldAlarm;
+		}
+
+		public static void setShieldAlarm(List<String> shieldAlarm) {
+			ContainerUtil.shieldAlarm = shieldAlarm;
+		}
+
+		public static HashMap<String, String> getDevVers() {
+			return devVers;
+		}
+
+		public static void setDevVers(HashMap<String, String> devVers) {
+			ContainerUtil.devVers = devVers;
+		}
+
+		public static String getMidFlag() {
+			return midFlag;
+		}
+
+		public static void setMidFlag(String midFlag) {
+			ContainerUtil.midFlag = midFlag;
+		}
+
+		public static HashMap<String, AgainPowerOnAlarmPojo> getApoa() {
+			return apoa;
+		}
+
+		public static long getDelay() {
+			return delay;
+		}
+
+		public static void setDelay(long delay) {
+			ContainerUtil.delay = delay;
+		}
+
+		public static long getExcuteRate() {
+			return excuteRate;
+		}
+
+		public static void setExcuteRate(long excuteRate) {
+			ContainerUtil.excuteRate = excuteRate;
+		}
+
+//		public static Logger getLoggerPrint() {
+//			return Logger.getLogger("r1");
+//		}
+
+		public static DatagramSocket getDs() {
+			return ds;
+		}
+
+		public static void setDs(DatagramSocket ds) {
+			ContainerUtil.ds = ds;
+		}
+
+		public static HashMap<String, String> getCommunicationConfig() {
+			return communicationConfig;
+		}
+
+		public static void setCommunicationConfig(
+				HashMap<String, String> communicationConfig) {
+			ContainerUtil.communicationConfig = communicationConfig;
+		}
+
+//		public static void setLoggerPrint(Logger loggerPrint) {
+//			ContainerUtil.loggerPrint = loggerPrint;
+//		}
+//
+//		public static Logger getLoggerWrite() {
+//			return Logger.getLogger("r2");
+//		}
+
+		public static long getAlarm_fire_time() {
+			return alarm_fire_time;
+		}
+
+		public static void setAlarm_fire_time(long alarm_fire_time) {
+			ContainerUtil.alarm_fire_time = alarm_fire_time;
+		}
+
+		public static long getAlarm_accpet_time() {
+			return alarm_accpet_time;
+		}
+
+		public static void setAlarm_accpet_time(long alarm_accpet_time) {
+			ContainerUtil.alarm_accpet_time = alarm_accpet_time;
+		}
+
+//		public static void setLoggerWrite(Logger loggerWrite) {
+//			ContainerUtil.loggerWrite = loggerWrite;
+//		}
+
+		public static String getResponseUrl() {
+			return responseUrl;
+		}
+
+		public static ReentrantLock getReentrantLock() {
+			return reentrantLock;
+		}
+
+		public static void setReentrantLock(ReentrantLock reentrantLock) {
+			ContainerUtil.reentrantLock = reentrantLock;
+		}
+
+		public static void setResponseUrl(String responseUrl) {
+			ContainerUtil.responseUrl = responseUrl;
+		}
+
+		// 校验码
+		public static String checksum(byte[] data) {
+
+			int sum = 0;
+			for (int i = 0; i < data.length; i++) {
+				/**
+				 * 贝电的做法是所有byte字节的正整数表示值相加求和，java中的byte大于0x80后表示为负整数，所以要 先转换为正整数再加
+				 */
+				if (data[i] < 0) {
+					sum = sum + (int) (data[i] & 0xff);
+				} else {
+					sum = sum + data[i];
+				}
+			}
+			/** 模65535取反加1 */
+			sum = 0xffff - (sum & 0xffff) + 1;
+			return integerToHex(sum);
+		}
+
+		/** 将一个整数转换为十六进制的字符串形式返回，返回值为4个字符表示 */
+		public static String integerToHex(int i) {
+			char[] temp = new char[4];
+			temp[0] = Character.forDigit((i & 0xf000) >> 12, 16);
+			temp[1] = Character.forDigit((i & 0x0f00) >> 8, 16);
+			temp[2] = Character.forDigit((i & 0x00f0) >> 4, 16);
+			temp[3] = Character.forDigit((i & 0x000f), 16);
+			return new String(temp).toUpperCase();
+		}
+
+		/**
+		 * 十进制转换为十六进制字符串
+		 * 
+		 * @param algorism
+		 *            int 十进制的数字
+		 * @return String 对应的十六进制字符串
+		 */
+		public static String algorismToHEXString(int algorism) {
+			String result = "";
+			result = Integer.toHexString(algorism);
+
+			if (result.length() % 2 == 1) {
+				result = "0" + result;
+
+			}
+			result = result.toUpperCase();
+
+			return result;
+		}
+
+		/** 配置下发的浮点数转换成16进制字符串 */
+		public static String floatToString(String s) {
+			float f = Float.parseFloat(s);
+			int fbit = Float.floatToIntBits(f);
+			byte[] b = new byte[4];
+			for (int i = 0; i < 4; i++) {
+				b[i] = (byte) (fbit >> (24 - i * 8));
+			}
+			// 小端模式发送故翻转数组
+			int len = b.length;
+			byte temp;
+			// 将顺位第i个与倒数第i个交换
+			for (int i = 0; i < len / 2; ++i) {
+				temp = b[i];
+				b[i] = b[len - i - 1];
+				b[len - i - 1] = temp;
+			}
+			String hex = bytesToHex(b);
+			return hex;
+		}
+
+		/** 将一个字节数组转换为十六进制的字符串形式返回 */
+		public static String bytesToHex(byte[] buffer) {
+			StringBuffer sb = new StringBuffer(buffer.length * 2);
+			for (int i = 0; i < buffer.length; i++) {
+				sb.append(Character.forDigit((buffer[i] & 0xF0) >> 4, 16));
+				sb.append(Character.forDigit(buffer[i] & 0x0F, 16));
+			}
+			// if(sb.length()>40)
+			// {
+			// sb.setCharAt(42, '1');
+			// sb.setCharAt(43, '\r');
+			// }
+			return sb.toString().toUpperCase();
+		}
+
+		// 配置指令校验
+		public static String cfgchkSum(String s) {
+			byte[] data = ContainerUtil.hexStrToBytes(s);
+			int sum = 0;
+			for (int i = 0; i < data.length; i++) {
+				if (data[i] < 0) {
+					sum = sum + (int) (data[i] & 0xff);
+				} else {
+					sum = sum + data[i];
+				}
+			}
+			sum = (sum + 0x23) & 0xff;
+			String result = ContainerUtil.algorismToHEXString(sum);
+			return result;
+		}
+
+//		public static void JXloadTimelyBuf(Connection con) throws SQLException{
+//			Statement statAlarm = null;
+//			Statement statData = null;
+//			try{
+//				String sqlAlarm = "select * from tb_current_alarm";
+//				statAlarm = con.createStatement();
+//				ResultSet rsAlarm = statAlarm.executeQuery(sqlAlarm);
+//				while(rsAlarm.next()){
+//					try{
+//						int id = rsAlarm.getInt("ID");
+//						String DEVICE_ID = rsAlarm.getString("DEVICE_ID");
+//						String DEVICE_DID = rsAlarm.getString("DEVICE_DID");
+//						String DEVICE_TYPE = rsAlarm.getString("DEVICE_TYPE");
+//						String ALARM_TYPE = rsAlarm.getString("ALARM_TYPE");
+//						String ALARM_STATUS = rsAlarm.getString("ALARM_STATUS");
+//						String ALARM_TIME = rsAlarm.getString("ALARM_TIME");
+//						String ALARM_IMG = rsAlarm.getString("ALARM_IMG");
+//						String ALARM_LV = rsAlarm.getString("ALARM_LV");
+//						JXTimlyAlarmPojo RTjxap = new JXTimlyAlarmPojo();
+//						RTjxap.setDEVICE_ID(DEVICE_ID);
+//						RTjxap.setDEVICE_DID(DEVICE_DID);
+//						RTjxap.setALARM_TYPE(ALARM_TYPE);
+//						RTjxap.setALARM_STATUS(ALARM_STATUS);
+//						RTjxap.setALARM_TIME(ALARM_TIME);
+//						RTjxap.setALARM_IMG(ALARM_IMG);
+//						RTjxap.setALARM_LV(ALARM_LV);
+//						ContainerUtil.getJXtimlyBuf().put(DEVICE_ID + "#" + ALARM_TYPE, RTjxap);
+//					}catch(Exception e){
+//						e.printStackTrace();
+//					}
+//				}
+//				rsAlarm.close();
+//				statAlarm.close();
+//				
+//				String sqlData = "select * from tb_current_data";
+//				statData = con.createStatement();
+//				ResultSet rsData = statData.executeQuery(sqlData);
+//				while (rsData.next()) {
+//					try{
+//					int id = rsData.getInt("ID");
+//					String DEVICE_ID = rsData.getString("DEVICE_ID");
+//					String DEVICE_DID = rsData.getString("DEVICE_DID");
+//					String DEVICE_TYPE = rsData.getString("DEVICE_TYPE");
+//					String DATA_MODEL = rsData.getString("DATA_MODEL");
+//					String DATA_TYPE = rsData.getString("DATA_TYPE");
+//					String DATA_VALUE = rsData.getString("DATA_VALUE");
+//					String DATA_TIME = rsData.getString("DATA_TIME");
+//					String ALARM_STATUS = rsData.getString("ALARM_STATUS");
+//					String ALARM_LV = rsData.getString("ALARM_LV");
+//					JXTimlyAlarmPojo RTjxap = new JXTimlyAlarmPojo();
+//					RTjxap.setDEVICE_ID(DEVICE_ID);
+//					RTjxap.setDEVICE_DID(DEVICE_DID);
+//					RTjxap.setDEVICE_TYPE(DEVICE_TYPE);
+//					RTjxap.setDATA_MODEL(DATA_MODEL);
+//					RTjxap.setDATA_TYPE(DATA_TYPE);
+//					RTjxap.setDATA_VALUE(DATA_VALUE);
+//					RTjxap.setDATA_TIME(DATA_TIME);
+//					ContainerUtil.getJXtimlyBuf().put(DEVICE_ID + "#" + DATA_TYPE, RTjxap);
+//					}catch(Exception e){
+//						e.printStackTrace();
+//					}
+//				}
+//				rsData.close();
+//				statData.close();
+//				
+//				con.close();
+//			}catch(Exception e){
+//				e.printStackTrace();
+//			}finally{
+//				try{
+////				if(statSwitch != null){
+////					statSwitch.close();
+////				}
+//				if(statData != null){
+//					statData.close();
+//				}
+//				if(statAlarm != null){
+//					statAlarm.close();
+//				}
+//				if(con != null){
+//					con.close();
+//				}
+//				}catch(Exception e){
+//					e.printStackTrace();
+//				}
+//			}
+//		}
+		
+		public static void loadParamBuf(Connection con) throws SQLException{
+			Statement statParam = null;
+			try{
+				String sqlParam = "select * from tb_device_param";
+				statParam = con.createStatement();
+				ResultSet rsParam = statParam.executeQuery(sqlParam);
+				while(rsParam.next()){
+					try{
+						int id = rsParam.getInt("id");
+						String deviceId = rsParam.getString("deviceId");
+						String channel = rsParam.getString("channel");
+						String channelType = rsParam.getString("channelType");
+						String param = rsParam.getString("param");
+						long uploadTime = rsParam.getLong("uploadTime");
+						ParamPojo pp = new ParamPojo();
+						pp.setDeviceId(deviceId);
+						pp.setChannel(channel);
+						pp.setChannelType(channelType);
+						pp.setParam(param);
+						pp.setUploadTime(uploadTime);
+						ContainerUtil.getTimlyParamBuf().put(deviceId + "#" + channel, pp);
+					}catch(Exception e){
+						e.printStackTrace();
+					}
+				}
+				rsParam.close();
+				statParam.close();
+				con.close();
+			}catch(Exception e){
+				e.printStackTrace();
+			}finally{
+				try{
+				if(statParam != null){
+					statParam.close();
+				}
+				if(con != null){
+					con.close();
+				}
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		public static void loadTimelyBuf(Connection con) throws SQLException {
+			Statement statAlarm = null;
+			Statement statSwitch = null;
+			Statement statAnalog = null;
+			try{
+			String sqlAlarm = "select * from tb_current_alarm";
+			statAlarm = con.createStatement();
+			ResultSet rsAlarm = statAlarm.executeQuery(sqlAlarm);
+			while (rsAlarm.next()) {
+				try{
+					int id = rsAlarm.getInt("id");
+					String deviceId = rsAlarm.getString("deviceId");
+					String signalName = rsAlarm.getString("signalName");
+					int alarmStatus = rsAlarm.getInt("alarmStatus");
+					int switchStatus = rsAlarm.getInt("switchStatus");
+					String analogValue = rsAlarm.getString("analogValue");
+					long uploadDateTime = rsAlarm.getLong("uploadDateTime");
+					int confirmState = rsAlarm.getInt("confirmState");
+					TheTimlyAlarmPojo ttap = new TheTimlyAlarmPojo();
+					ttap.setId(id);
+					ttap.setDeviceId(deviceId);
+					ttap.setSignalId(signalName);
+					ttap.setAlarmStatus(alarmStatus);
+					ttap.setSwitchStatus(switchStatus);
+					ttap.setAnalogValue(analogValue);
+					ttap.setUploadTime(uploadDateTime);
+					ttap.setConfirmState(confirmState);
+					ContainerUtil.getTimlyAlarmBuf().put(deviceId + "#" + signalName,
+							ttap);
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+				
+			rsAlarm.close();
+			statAlarm.close();
+
+//			con.close();
+			//analog
+			String sqlAnalog = "select * from tb_current_analog";
+			statAnalog = con.createStatement();
+			ResultSet rsAnalog = statAnalog.executeQuery(sqlAnalog);
+			while (rsAnalog.next()) {
+				try{
+				int id = rsAnalog.getInt("id");
+				String deviceId = rsAnalog.getString("deviceId");
+				String signalName = rsAnalog.getString("signalName");
+//				int alarmStatus = rsAlarm.getInt("alarmStatus");
+//				int switchStatus = rsAlarm.getInt("switchStatus");
+				String signalValue = rsAnalog.getString("signalValue");
+				long uploadDateTime = rsAnalog.getLong("uploadDateTime");
+//				int confirmState = rsAlarm.getInt("confirmState");
+				TheTimlyAlarmPojo ttap = new TheTimlyAlarmPojo();
+				ttap.setId(id);
+				ttap.setDeviceId(deviceId);
+				ttap.setAnalogSignalId(signalName);
+//				ttap.setAlarmStatus(alarmStatus);
+//				ttap.setSwitchStatus(switchStatus);
+				ttap.setAlgValue(signalValue);
+				ttap.setUploadTime(uploadDateTime);
+//				ttap.setConfirmState(confirmState);
+				ContainerUtil.getTimlyAlarmBuf().put(deviceId + "#" + signalName,
+						ttap);
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+			rsAnalog.close();
+			statAnalog.close();
+			//switch
+			String sqlSwitch = "select * from tb_current_switch";
+			statSwitch = con.createStatement();
+			ResultSet rsSwitch = statSwitch.executeQuery(sqlSwitch);
+			while (rsSwitch.next()) {
+				try{
+				int signalStatus;
+				int id = rsSwitch.getInt("id");
+				String deviceId = rsSwitch.getString("deviceId");
+				String signalName = rsSwitch.getString("signalName");
+//				int alarmStatus = rsAlarm.getInt("alarmStatus");
+				String signalStatusStr = rsSwitch.getString("signalStatus");
+				if(signalStatusStr.equals("OFF")){
+					signalStatus = 0;
+				}else if(signalStatusStr.equals("ON")){
+					signalStatus = 1;
+				}else{
+					signalStatus = Integer.valueOf(signalStatusStr);
+				}
+//				String signalValue = rsAnalog.getString("signalValue");
+				long uploadDateTime = rsSwitch.getLong("uploadDateTime");
+//				int confirmState = rsAlarm.getInt("confirmState");
+				TheTimlyAlarmPojo ttap = new TheTimlyAlarmPojo();
+				ttap.setId(id);
+				ttap.setDeviceId(deviceId);
+				ttap.setSwitchSignalId(signalName);
+//				ttap.setAlarmStatus(alarmStatus);
+				ttap.setSwhStatus(signalStatus);
+//				ttap.setAnalogValue(signalValue);
+				ttap.setUploadTime(uploadDateTime);
+//				ttap.setConfirmState(confirmState);
+				ContainerUtil.getTimlyAlarmBuf().put(deviceId + "#" + signalName,
+						ttap);
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+			rsAnalog.close();
+			statSwitch.close();
+			con.close();
+			}catch(Exception e){
+				e.printStackTrace();
+			}finally{
+				try{
+				if(statSwitch != null){
+					statSwitch.close();
+				}if(statAnalog != null){
+					statAnalog.close();
+				}if(statAlarm != null){
+					statAlarm.close();
+				}
+				if(con != null){
+					con.close();
+				}
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+		}
+
+		public static HashMap<String, TheTimlyAlarmPojo> getTimlyAlarmBuf() {
+			return timlyAlarmBuf;
+		}
+
+		public static void setTimlyAlarmBuf(
+				HashMap<String, TheTimlyAlarmPojo> timlyAlarmBuf) {
+			ContainerUtil.timlyAlarmBuf = timlyAlarmBuf;
+		}
+
+		public static void setApoa(HashMap<String, AgainPowerOnAlarmPojo> apoa) {
+			ContainerUtil.apoa = apoa;
+		}
+
+		public static void createHttpClient() {
+			ContainerUtil.httpClient = HttpClientBuilder.create()
+					.setDefaultCredentialsProvider(new BasicCredentialsProvider())
+					.build();
+
+		}
+		//设备告警缓存初始化，应对与网络中断期间告警发生变化的情况 by seifer 20191014
+		public static void loadDeviceAlarm(Connection connection,String typeFlag) throws SQLException {
+			
+				if(typeFlag.equalsIgnoreCase("0")||typeFlag.equalsIgnoreCase("2")){//通用采集器或者AED采集器
+					Statement stat = connection.createStatement();
+					String sql = "select * from tb_current_alarm";
+					ResultSet rs = stat.executeQuery(sql);
+					while (rs.next()){
+						int id = rs.getInt("id");
+						String deviceId = rs.getString("deviceId");
+						String signalId = rs.getString("signalName");
+						String alarmStatus = rs.getString("alarmStatus");
+						String switchStatus = rs.getString("switchStatus");
+						String analogValue = rs.getString("analogValue");
+						String uploadDateTime = rs.getString("uploadDateTime");
+						String devType = deviceId.substring(4, 6);
+						if((!devType.equalsIgnoreCase("70")&&!devType.equalsIgnoreCase("71")&&!devType.equalsIgnoreCase("92"))
+							&&(!deviceId.substring(0, 2).equalsIgnoreCase("A1"))
+							&&ContainerUtil.getDevices().get(deviceId)!=null
+							&&(!signalId.substring(0, 2).equalsIgnoreCase("bd"))){
+							//图片告警设备和aed1期设备、MQTT协议设备不进行告警缓存存储
+							DevicePojo dp = ContainerUtil.getDevices().get(deviceId);
+							AlarmPojo ap = new AlarmPojo();
+							if(analogValue==null){
+								ap.setSignalId(signalId);
+								ap.setAlarmStatus(Integer.parseInt(alarmStatus));
+								ap.setSwitchStatus(Integer.parseInt(switchStatus));
+								ap.setAnalogValue(analogValue);
+								//ap.setUploadTime(Long.parseLong(uploadDateTime));
+								ap.setTypeFlag("switch");
+							}else{
+								ap.setSignalId(signalId);
+								ap.setAlarmStatus(Integer.parseInt(alarmStatus));
+								ap.setSwitchStatus(Integer.parseInt(switchStatus));
+								ap.setAnalogValue(analogValue);
+								//ap.setUploadTime(Long.parseLong(uploadDateTime));
+								ap.setTypeFlag("analog");
+							}
+							ContainerUtil.refreshPreSet(dp, ap);
+						}
+						//位置1处
+//						rs.close();
+//						stat.close();
+					}
+					//之前位置1处
+					rs.close();
+					stat.close();
+				}
+//				else if(typeFlag.equalsIgnoreCase("3")){
+//					Statement stat = connection.createStatement();
+//					String sql = "select * from tb_current_alarm";
+//					ResultSet rs = stat.executeQuery(sql);
+//					while (rs.next()){
+//						String DEVICE_ID = rs.getString("DEVICE_ID");
+//						String DEVICE_DID = rs.getString("DEVICE_DID");
+//						String DEVICE_TYPE = rs.getString("DEVICE_TYPE");
+//						String ALARM_TYPE = rs.getString("ALARM_TYPE");
+//						String ALARM_IMG = rs.getString("ALARM_IMG");
+//						String ALARM_STATUS = rs.getString("ALARM_STATUS");
+//						String ALARM_LV = rs.getString("ALARM_LV");
+//						String ALARM_TIME = rs.getString("ALARM_TIME");
+//					
+//						JXAlarmPojo jxap = new JXAlarmPojo();
+//						jxap.setALARM_IMG(ALARM_IMG);
+//						jxap.setALARM_LV(ALARM_LV);
+//						jxap.setALARM_STATUS(ALARM_STATUS);
+//						jxap.setALARM_TIME(ALARM_TIME);
+//						jxap.setALARM_TYPE(ALARM_TYPE);
+//						jxap.setDEVICE_DID(DEVICE_DID);
+//						jxap.setDEVICE_ID(DEVICE_ID);
+//						jxap.setDEVICE_TYPE(DEVICE_TYPE);
+//						JXDevicePojo jxdp = ContainerUtil.getJXdevices().get(DEVICE_ID);
+//						ContainerUtil.JXrefreshPreSet(jxdp, jxap);
+//					}
+//					rs.close();
+//					stat.close();
+//				}
+				else{//采集器类型为天地图片告警采集器，只获取实时告警表中的图像设备的告警，避免启动报错
+					Statement stat = connection.createStatement();
+					String sql = "select * from tb_current_alarm";
+					ResultSet rs = stat.executeQuery(sql);
+					while (rs.next()){
+						int id = rs.getInt("id");
+						String deviceId = rs.getString("deviceId");
+						String signalId = rs.getString("signalName");
+						String alarmStatus = rs.getString("alarmStatus");
+						String switchStatus = rs.getString("switchStatus");
+						String analogValue = rs.getString("analogValue");
+						String uploadDateTime = rs.getString("uploadDateTime");
+						String devType = deviceId.substring(4, 6);
+					if((devType.equalsIgnoreCase("70")||devType.equalsIgnoreCase("71"))&&ContainerUtil.getDevices().get(deviceId)!=null){
+						DevicePojo dp = ContainerUtil.getDevices().get(deviceId);
+						AlarmPojo ap = new AlarmPojo();
+						if(analogValue==null){
+							ap.setSignalId(signalId);
+							ap.setAlarmStatus(Integer.parseInt(alarmStatus));
+							ap.setSwitchStatus(Integer.parseInt(switchStatus));
+							ap.setAnalogValue(analogValue);
+							//ap.setUploadTime(Long.parseLong(uploadDateTime));
+							ap.setTypeFlag("switch");
+						}else{
+							ap.setSignalId(signalId);
+							ap.setAlarmStatus(Integer.parseInt(alarmStatus));
+							ap.setSwitchStatus(Integer.parseInt(switchStatus));
+							ap.setAnalogValue(analogValue);
+							//ap.setUploadTime(Long.parseLong(uploadDateTime));
+							ap.setTypeFlag("analog");
+						}
+						ContainerUtil.refreshPreSet(dp, ap);
+					}
+				}
+					rs.close();
+					stat.close();
+				}
+					connection.close();
+//					}
+//				else if(typeFlag.equalsIgnoreCase("3")){
+//					String DEVICE_ID = rs.getString("DEVICE_ID");
+//					String DEVICE_DID = rs.getString("DEVICE_DID");
+//					String DEVICE_TYPE = rs.getString("DEVICE_TYPE");
+//					String ALARM_TYPE = rs.getString("ALARM_TYPE");
+//					String ALARM_IMG = rs.getString("ALARM_IMG");
+//					String ALARM_STATUS = rs.getString("ALARM_STATUS");
+//					String ALARM_LV = rs.getString("ALARM_LV");
+//					String ALARM_TIME = rs.getString("ALARM_TIME");
+//					
+//					JXAlarmPojo jxap = new JXAlarmPojo();
+//					jxap.setALARM_IMG(ALARM_IMG);
+//					jxap.setALARM_LV(ALARM_LV);
+//					jxap.setALARM_STATUS(ALARM_STATUS);
+//					jxap.setALARM_TIME(ALARM_TIME);
+//					jxap.setALARM_TYPE(ALARM_TYPE);
+//					jxap.setDEVICE_DID(DEVICE_DID);
+//					jxap.setDEVICE_ID(DEVICE_ID);
+//					jxap.setDEVICE_TYPE(DEVICE_TYPE);
+//					JXDevicePojo jxdp = ContainerUtil.getJXdevices().get(DEVICE_ID);
+//					ContainerUtil.JXrefreshPreSet(jxdp, jxap);
+//				}else{//采集器类型为天地图片告警采集器，只获取实时告警表中的图像设备的告警，避免启动报错
+//					if((devType.equalsIgnoreCase("70")||devType.equalsIgnoreCase("71"))&&ContainerUtil.getDevices().get(deviceId)!=null){
+//						DevicePojo dp = ContainerUtil.getDevices().get(deviceId);
+//						AlarmPojo ap = new AlarmPojo();
+//						if(analogValue==null){
+//							ap.setSignalId(signalId);
+//							ap.setAlarmStatus(Integer.parseInt(alarmStatus));
+//							ap.setSwitchStatus(Integer.parseInt(switchStatus));
+//							ap.setAnalogValue(analogValue);
+//							//ap.setUploadTime(Long.parseLong(uploadDateTime));
+//							ap.setTypeFlag("switch");
+//						}else{
+//							ap.setSignalId(signalId);
+//							ap.setAlarmStatus(Integer.parseInt(alarmStatus));
+//							ap.setSwitchStatus(Integer.parseInt(switchStatus));
+//							ap.setAnalogValue(analogValue);
+//							//ap.setUploadTime(Long.parseLong(uploadDateTime));
+//							ap.setTypeFlag("analog");
+//						}
+//						ContainerUtil.refreshPreSet(dp, ap);
+//					}
+//				}
+//			}
+			
+		}
+		//江西项目摄像头设备与监控设备绑定
+//		public static void cameraBand(Connection connection) throws Exception{
+//			String sql = "select * from tb_camera";
+//			Statement stat = connection.createStatement();
+//			ResultSet rs = stat.executeQuery(sql);
+//			while(rs.next()){
+//				String DEVICE_ID = rs.getString("DEVICE_CODE");
+//				String IP_ADDRESS = rs.getString("IP_ADDRESS");
+////				String DEVICE_DEVICEID = rs.getString("DEVICE_DEVICEID");
+//				ContainerUtil.cameraBandbuf.put(IP_ADDRESS, DEVICE_ID);
+//			}
+//			rs.close();
+//			stat.close();
+//			connection.close();
+//		}
+		
+		public static void loadDevice(Connection connection,String typeFlag, List<String> tmpIp, List<String> tmpPort) throws Exception {
+//			if(typeFlag.equalsIgnoreCase("3")){//江西项目采集器
+//				String sql = "select * from tb_device";
+//				Statement stat = connection.createStatement();
+//				ResultSet rs = stat.executeQuery(sql.toString());
+//				while(rs.next()){
+//					int id = rs.getInt("id");
+//					String deviceId = rs.getString("deviceId");
+//					String state = rs.getString("state");
+//					String offlineAlarmState = null;
+//					//设备离线状态标志位初始化
+//					if(state.equalsIgnoreCase("0")){
+//						offlineAlarmState = "1";
+//					}else{
+//						offlineAlarmState = "0";
+//					}
+//					JXDevicePojo jxdp = new JXDevicePojo();
+//					jxdp.setId(id);
+//					jxdp.setDeviceId(deviceId);
+////					dp.setIp(localIp);
+////					dp.setPort(localPort);
+////					dp.setTargetIp(targetIp);
+////					dp.setTargetPort(targetPort);
+//					jxdp.setState(state);
+//					jxdp.setOfflineAlarmState(offlineAlarmState);
+//					ContainerUtil.JXdevices.put(deviceId, jxdp);
+//					//System.out.println("DeviceID: "+deviceId);
+//				}
+//			}else 
+				if(typeFlag.equalsIgnoreCase("2")){//AED采集器
+				StringBuffer sql = new StringBuffer();
+				sql.append("select * from tb_aed_outdevice where ipForward IN(");
+				for(int i = 0; i < tmpIp.size(); i++){
+					if(i == 0){
+						sql.append("'");sql.append(tmpIp.get(i));sql.append("'");
+					}else{
+						sql.append(", '");sql.append(tmpIp.get(i));sql.append("'");
+					}
+				}
+				sql.append(") and portForward in(");
+				for(int i = 0; i < tmpPort.size(); i++){
+					if(i == 0){
+						sql.append("'");sql.append(tmpPort.get(i));sql.append("'");
+					}else{
+						sql.append(", '");sql.append(tmpPort.get(i));sql.append("'");
+					}
+				}
+				sql.append(")");
+				Statement stat = connection.createStatement();
+				ResultSet rs = stat.executeQuery(sql.toString());
+				while(rs.next()){
+					int id = rs.getInt("id");
+					String deviceId = rs.getString("deviceId");
+					String localIp = rs.getString("ip");
+					int localPort = rs.getInt("port");
+					String targetIp = rs.getString("ipForward");
+					int targetPort = rs.getInt("portForward");
+					String devType = deviceId.substring(4, 6);
+					//AED设备数据库state与缓存状态相反  by seifer 200326
+					String state = rs.getString("state");
+					String offlineAlarmState = null;
+					//state状态替换，设备离线状态标志位初始化
+					if(state.equalsIgnoreCase("0")){
+						state ="1";
+						offlineAlarmState = "0";
+					}else if(state.equalsIgnoreCase("1")){
+						state = "0";
+						offlineAlarmState = "1";
+					}else if(state.equalsIgnoreCase("2")){
+						state = "2";
+						offlineAlarmState = "0";
+					}
+					if(devType.equalsIgnoreCase("88")){
+						DevicePojo dp = new DevicePojo();
+						dp.setId(id);
+						dp.setDeviceId(deviceId);
+						dp.setIp(localIp);
+						dp.setPort(localPort);
+						dp.setTargetIp(targetIp);
+						dp.setTargetPort(targetPort);
+						dp.setState(state);
+						dp.setOfflineAlarmState(offlineAlarmState);
+						ContainerUtil.devices.put(deviceId, dp);
+						//临时增加，配合测试 by seifer 200628
+						System.out.println("AED deviceID: "+deviceId);
+						//增加命令下发设备缓存 by seifer 200605
+						DeviceCommandPojo dcp = new DeviceCommandPojo();
+						dcp.setDeviceId(deviceId);
+						ContainerUtil.deviceCommBuf.put(deviceId, dcp);
+					}
+				}
+				rs.close();
+				stat.close();
+				
+				String sql1 = "SELECT tb_aed_outdevice.deviceId, MAX(tb_current_analog.uploadDateTime) AS ant, MAX(tb_current_switch.uploadDateTime) AS swt, MAX(GREATEST(tb_current_analog.uploadDateTime, tb_current_switch.uploadDateTime)) AS rmax FROM tb_aed_outdevice LEFT JOIN tb_current_analog ON tb_aed_outdevice.deviceId = tb_current_analog.deviceId LEFT JOIN tb_current_switch ON tb_current_switch.deviceId = tb_aed_outdevice.deviceId GROUP BY tb_aed_outdevice.deviceId";
+				Statement stat1 = connection.createStatement();
+				ResultSet rs1 = stat1.executeQuery(sql1);
+				while(rs1.next()){
+					try{
+					String deviceId = rs1.getString("deviceId");
+					String ant = rs1.getString("ant");
+					String swt = rs1.getString("swt");
+					String max = rs1.getString("rmax");
+//					System.out.println(deviceId);
+					if(max == null){
+						if(ant == null && swt != null){
+							max = swt;
+						}else if(swt == null && ant != null){
+							max = ant;
+						}else{
+							continue;
+						}
+					}
+					if(max != null){
+						if(ContainerUtil.devices.get(deviceId)!=null){
+							ContainerUtil.devices.get(deviceId).setRefreshTime(sdfStand.parse(max).getTime());
+						}
+					}
+					}catch(Exception e){
+						e.printStackTrace();
+					}
+				}
+				rs1.close();
+				stat1.close();
+				connection.close();
+			}else{
+				Statement stat = connection.createStatement();
+//				String sql = "select * from tb_device";
+				StringBuffer sql = new StringBuffer();
+				
+				if(Boolean.parseBoolean(communicationConfig.get("tcp_client_used"))){
+					String flag = communicationConfig.get("tcp_client_dev_flag");
+					sql.append("select * from tb_device where divideFlag = '" + flag + "'");
+				}else{
+					sql.append("select * from tb_device where ipForward IN(");
+					for(int i = 0; i < tmpIp.size(); i++){
+						if(i == 0){
+							sql.append("'");sql.append(tmpIp.get(i));sql.append("'");
+						}else{
+							sql.append(", '");sql.append(tmpIp.get(i));sql.append("'");
+						}
+					}
+					sql.append(") and portForward in(");
+					for(int i = 0; i < tmpPort.size(); i++){
+						if(i == 0){
+							sql.append("'");sql.append(tmpPort.get(i));sql.append("'");
+						}else{
+							sql.append(", '");sql.append(tmpPort.get(i));sql.append("'");
+						}
+					}
+					sql.append(")");
+				}
+				
+//				Statement stat = connection.createStatement();
+//				System.out.println(sql);
+				ResultSet rs = stat.executeQuery(sql.toString());
+//				ResultSet rs = stat.executeQuery(sql);
+				while (rs.next()) {
+					int id = rs.getInt("id");
+					String deviceId = rs.getString("deviceId");
+					String localIp = rs.getString("ip");
+					int localPort = rs.getInt("port");
+					String targetIp = rs.getString("ipForward");
+					int targetPort = rs.getInt("portForward");
+					String devType = deviceId.substring(4, 6);
+					String state = rs.getString("state");
+					String offlineAlarmState = null;
+					//设备离线状态标志位初始化
+					if(state.equalsIgnoreCase("0")){
+						offlineAlarmState = "1";
+					}else{
+						offlineAlarmState = "0";
+					}
+					if(typeFlag.equalsIgnoreCase("0")){
+						if(!devType.equalsIgnoreCase("70")&&!devType.equalsIgnoreCase("71")&&!devType.equalsIgnoreCase("92")){
+							DevicePojo dp = new DevicePojo();
+							dp.setId(id);
+							dp.setDeviceId(deviceId);
+							dp.setIp(localIp);
+							dp.setPort(localPort);
+							dp.setTargetIp(targetIp);
+							dp.setTargetPort(targetPort);
+							dp.setState(state);
+							dp.setOfflineAlarmState(offlineAlarmState);
+							ContainerUtil.devices.put(deviceId, dp);
+							System.out.println("DeviceID: "+deviceId);
+							//增加命令下发设备缓存 by seifer 200605
+							DeviceCommandPojo dcp = new DeviceCommandPojo();
+							dcp.setDeviceId(deviceId);
+							ContainerUtil.deviceCommBuf.put(deviceId, dcp);
+						}
+					}else{//采集器类型为天地图片告警采集器，设备类型为"70"或"71"才建立缓存，避免重复生成离线告警 by seifer 200509
+					
+						if(devType.equalsIgnoreCase("70")||devType.equalsIgnoreCase("71")){
+							DevicePojo dp = new DevicePojo();
+							dp.setId(id);
+							dp.setDeviceId(deviceId);
+							dp.setIp(localIp);
+							dp.setPort(localPort);
+							dp.setTargetIp(targetIp);
+							dp.setTargetPort(targetPort);
+							dp.setState(state);
+							dp.setOfflineAlarmState(offlineAlarmState);
+							ContainerUtil.devices.put(deviceId, dp);
+						}
+					}
+				}
+				rs.close();
+				stat.close();
+				
+				String sql1 = "SELECT tb_device.deviceId, MAX(tb_current_analog.uploadDateTime) AS ant, MAX(tb_current_switch.uploadDateTime) AS swt, MAX(GREATEST(tb_current_analog.uploadDateTime, tb_current_switch.uploadDateTime)) AS rmax FROM tb_device LEFT JOIN tb_current_analog ON tb_device.deviceId = tb_current_analog.deviceId LEFT JOIN tb_current_switch ON tb_current_switch.deviceId = tb_device.deviceId GROUP BY tb_device.deviceId";
+				Statement stat1 = connection.createStatement();
+				ResultSet rs1 = stat1.executeQuery(sql1);
+				while(rs1.next()){
+					try{
+					String deviceId = rs1.getString("deviceId");
+					String ant = rs1.getString("ant");
+					String swt = rs1.getString("swt");
+					String max = rs1.getString("rmax");
+//					System.out.println(deviceId);
+					if(max == null){
+						if(ant == null && swt != null){
+							max = swt;
+						}else if(swt == null && ant != null){
+							max = ant;
+						}else{
+							continue;
+						}
+					}
+					if(max != null){
+						if(ContainerUtil.devices.get(deviceId)!=null){
+							ContainerUtil.devices.get(deviceId).setRefreshTime(sdfStand.parse(max).getTime());
+						}
+					}
+					}catch(Exception e){
+						e.printStackTrace();
+					}
+				}
+				rs1.close();
+				stat1.close();
+				connection.close();
+			}
+
+		}
+
+		public static long getOfflineFlag() {
+			return offlineFlag;
+		}
+
+		public static void setOfflineFlag(long offlineFlag) {
+			ContainerUtil.offlineFlag = offlineFlag;
+		}
+
+		public static byte[] hexStrToBytes(String hexStr) {
+			int len = hexStr.length() / 2;
+			byte[] temp = new byte[len];
+			int j = 0;
+			for (int i = 0; i < len; i++) {
+				// System.out.println(hexStr.substring(j,j+2));
+				temp[i] = (byte) Integer.parseInt(hexStr.substring(j, j + 2), 16);
+				j = j + 2;
+			}
+			return temp;
+		}
+
+		/** 16进制字符串转为10进制int */
+		public static int hexStringToAlgorism(String hex) {
+			hex = hex.toUpperCase();
+			int max = hex.length();
+			int result = 0;
+			for (int i = max; i > 0; i--) {
+				char c = hex.charAt(i - 1);
+				int algorism = 0;
+				if (c >= '0' && c <= '9') {
+					algorism = c - '0';
+				} else {
+					algorism = c - 55;
+				}
+				result += Math.pow(16, max - i) * algorism;
+			}
+			return result;
+		}
+
+		public static int getUploadFlag() {
+			return uploadFlag;
+		}
+
+		public static void setUploadFlag(int uploadFlag) {
+			ContainerUtil.uploadFlag = uploadFlag;
+		}
+
+		public static List<Upload> getUp1() {
+			return up1;
+		}
+
+		public static void setUp1(List<Upload> up1) {
+			ContainerUtil.up1 = up1;
+		}
+
+		public static List<Upload> getUp2() {
+			return up2;
+		}
+
+		public static HashMap<String, Channel> getTcpClientFuture() {
+			return tcpClientFuture;
+		}
+
+		public static void setTcpClientFuture(
+				HashMap<String, Channel> tcpClientFuture) {
+			ContainerUtil.tcpClientFuture = tcpClientFuture;
+		}
+
+		public static void setUp2(List<Upload> up2) {
+			ContainerUtil.up2 = up2;
+		}
+
+		public static int getPushFlag() {
+			return pushFlag;
+		}
+
+		public static void setPushFlag(int pushFlag) {
+			ContainerUtil.pushFlag = pushFlag;
+		}
+
+		public static List<AlarmPojo> getPush1() {
+			return push1;
+		}
+
+		public static void setPush1(List<AlarmPojo> push1) {
+			ContainerUtil.push1 = push1;
+		}
+
+		public static List<AlarmPojo> getPush2() {
+			return push2;
+		}
+
+		public static void setPush2(List<AlarmPojo> push2) {
+			ContainerUtil.push2 = push2;
+		}
+
+		public static float getFloat(byte[] b) {
+			int l;
+			l = b[0];
+			l &= 0xff;
+			l |= ((long) b[1] << 8);
+			l &= 0xffff;
+			l |= ((long) b[2] << 16);
+			l &= 0xffffff;
+			l |= ((long) b[3] << 24);
+
+			return Float.intBitsToFloat(l);
+
+		}
+		
+		//时钟校准返回指令生成
+		public static byte[] TimeCalibration(String reciveData) {
+			// TODO Auto-generated method stub
+			String DeviceID = reciveData.substring(16, 32);
+			String SEQ = reciveData.substring(32,36);
+			String CmdType = reciveData.substring(14, 16);
+			String time = ContainerUtil.sdf.format(new Date());
+			String Info = CmdType + DeviceID + time;
+			String CheckData = reciveData.substring(2, 8) + ContainerUtil.CID2_TimeCalibrationAnswer + "F010" + Info + SEQ;
+			byte[] Data = ContainerUtil.hexStrToBytes(CheckData);
+			String CheckSum = ContainerUtil.checksum(Data);
+			String CMD = SOI + CheckData + CheckSum + EOI;
+			return message2Bytes(CMD);
+						
+			}
+
+		public static byte[] report(String data) {
+			int len = data.length();
+			String deviceId = data.substring(16, 32);
+			String seq = data.substring(len - 10, len - 6);
+			String type = data.substring(14, 16);
+			String info = type + deviceId;
+			String cid = "";
+			switch (data.substring(8, 10)) {
+			case "1B":
+				cid = "9B";
+				break;
+			case "1C":
+				cid = "9C";
+				break;
+			case "09":
+				cid = "89";
+				break;
+			case"02":
+				cid = "82";
+				break;
+			case"20":
+				cid = "A0";
+				break;
+			}	
+			StringBuffer sb = new StringBuffer();
+			sb.append(data.substring(2, 8));
+			sb.append(cid);
+			sb.append(M2);
+			sb.append(info);
+			sb.append(seq);
+			String tmp = sb.toString();
+			StringBuffer sb1 = new StringBuffer();
+			sb1.append(H);
+			sb1.append(tmp);
+			sb1.append(check(tmp));
+			sb1.append(E);
+//			Logger.getLogger("r3").info("返回数据：" + sb1.toString());
+			return message2Bytes(sb1.toString());
+
+		}
+
+		public static List<String> getHttpUrl() {
+			return httpUrl;
+		}
+
+		public static void setHttpUrl(List<String> httpUrl) {
+			ContainerUtil.httpUrl = httpUrl;
+		}
+		
+		public static HashMap<String,String> addDevVer(List<String> devVer){
+			HashMap<String,String> typeVer = new HashMap<String,String>(); 
+			for(String ver : devVer){
+				String key = ver.split(":")[0];
+				String value = ver.split(":")[1];
+				typeVer.put(key, value);
+			}
+			return typeVer;
+		}
+		
+		//接收指令校验类
+		public static boolean checkSUM(String data){
+			int l = data.length();
+			String checkData = data.substring(2, l-6);
+			byte[] Data = hexStrToBytes(checkData);
+			String checkSum = data.substring(l-6,l-2);
+			String checkSUM = ContainerUtil.checksum(Data);
+			if(checkSum.equalsIgnoreCase(checkSUM)){
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+		
+		private static String check(String tmp) {
+			int tmpV = 0;
+			for (int i = 0; i < tmp.length() / 2; i++) {
+				tmpV += Integer.parseInt(tmp.substring(i * 2, (i + 1) * 2), 16);
+			}
+			tmpV = (0xFFFF + ~((tmpV - 2) & 0xFFFF));
+			StringBuffer sb = new StringBuffer();
+			sb.append(Integer.toHexString((tmpV & 0xF000) >> 12));
+			sb.append(Integer.toHexString((tmpV & 0xF00) >> 8));
+			sb.append(Integer.toHexString((tmpV & 0xF0) >> 4));
+			sb.append(Integer.toHexString(tmpV & 0xF));
+			return sb.toString().toUpperCase();
+		}
+
+		public static byte[] message2Bytes(String data) {
+			int len = data.length() / 2;
+			byte[] bit = new byte[len];
+			for (int i = 0; i < len; i++) {
+				bit[i] = (byte) Integer.parseInt(
+						data.substring(i * 2, (i + 1) * 2), 16);
+			}
+			return bit;
+		}
+
+		public static HashMap<String, DevicePojo> getDevices() {
+			return devices;
+		}
+
+		public static SimpleDateFormat getSdfStand() {
+			return sdfStand;
+		}
+
+		public static void setSdfStand(SimpleDateFormat sdfStand) {
+			ContainerUtil.sdfStand = sdfStand;
+		}
+
+		public static void setDevices(HashMap<String, DevicePojo> devices) {
+			ContainerUtil.devices = devices;
+		}
+
+		public static CloseableHttpClient getHttpClient() {
+			return httpClient;
+		}
+
+		public static void setHttpClient(CloseableHttpClient httpClient) {
+			ContainerUtil.httpClient = httpClient;
+		}
+
+		public static SimpleDateFormat getSdfTable() {
+			return sdfTable;
+		}
+
+		public static HashMap<String, DeviceCommandPojo> getDeviceCommBuf() {
+			return deviceCommBuf;
+		}
+
+		public static void setDeviceCommBuf(
+				HashMap<String, DeviceCommandPojo> deviceCommBuf) {
+			ContainerUtil.deviceCommBuf = deviceCommBuf;
+		}
+
+		public static void setSdfTable(SimpleDateFormat sdfTable) {
+			ContainerUtil.sdfTable = sdfTable;
+		}
+		
+//		public static boolean upAlarmCheck(DevicePojo dp,Alarm ap){
+//			AlarmPreSetPojo aps = dp.getAlarmPreSet().get(ap.getInfoID());
+//			if(aps==null){
+//				return true;
+//			}else{
+//				String alarmStatus = ap.getAlarmState();
+//				if(String.valueOf(aps.getAlarmStatus()).equalsIgnoreCase(alarmStatus)){
+//					return false;
+//				}else{
+//					return true;
+//				}
+//			}
+//		}
+		
+		public static boolean alarmCheck(DevicePojo dp,AlarmPojo ap){
+			AlarmPreSetPojo aps = dp.getAlarmPreSet().get(ap.getSignalId());
+			if(aps==null){
+				return true;
+			}else{
+				int alarmStatus = ap.getAlarmStatus();
+				if(aps.getAlarmStatus()==alarmStatus){
+					return false;
+				}else{
+					return true;
+				}
+			}
+		}
+		
+		//排除江西硬件设备重复上报告警恢复数据 by seifer 210322
+//		public static boolean JXrefreshPreSet(JXDevicePojo jxdp,JXAlarmPojo jxap){
+//			JXAlarmPojo jap = jxdp.getRTAlarm().get(jxap.getALARM_TYPE());
+//			int ix = 0;
+//			if(jap==null){
+//				jxdp.getRTAlarm().put(jxap.getALARM_TYPE(), jxap);
+//				ix += 1;
+//				return true;
+//			}else{
+//				String as = jxap.getALARM_STATUS();
+//				String at = jxap.getALARM_TIME();
+////				if(!jap.getALARM_TIME().equals(at)){
+////					jap.setALARM_TIME(at);
+////					ix += 1;
+////				}
+//				if(!jap.getALARM_STATUS().equals(as)){
+//					jap.setALARM_STATUS(as);
+//					
+//					//告警状态从告警变成正常，需进行时长记录
+//					if(as.equals("0")){
+//						
+//						try {
+//							//告警恢复时间
+//							Date dar = sdfStand.parse(at);
+//							//告警生成时间
+//							Date da = sdfStand.parse(jap.getALARM_TIME());
+//							long diff = dar.getTime() - da.getTime();//这样得到的差值是毫秒级别  
+//						    long days = diff / (1000 * 60 * 60 * 24);  
+//						    long hours = (diff-days*(1000 * 60 * 60 * 24))/(1000* 60 * 60);  
+//						    long minutes = (diff-days*(1000 * 60 * 60 * 24)-hours*(1000* 60 * 60))/(1000* 60);
+//						    long seconds = (diff-days*(1000 * 60 * 60 * 24)-hours*(1000* 60 * 60)-minutes*(1000*60))/1000;
+//						    System.out.println(""+days+"天"+hours+"小时"+minutes+"分"+seconds+"秒");
+//						    jap.setALARM_DURATION(""+days+"天"+hours+"小时"+minutes+"分"+seconds+"秒");
+//						    //AI算法重复告警，只增加告警图片，等告警恢复时统一入库
+//							if(jap.getALARM_IMG()!=null&&jap.getALARM_IMG()!=""){
+//								String IMG = jxap.getALARM_IMG();
+//								String StrIMG = jap.getALARM_IMG()+";"+IMG;
+//								jap.setALARM_IMG(StrIMG);
+//							}
+//						} catch (ParseException e) {
+//							// TODO Auto-generated catch block
+//							e.printStackTrace();
+//						}
+//						
+//					}else{
+//						//告警缓存状态由正常变为告警，覆盖上一告警生命周期的图片
+//						jap.setALARM_IMG(jxap.getALARM_IMG());
+//					}
+//					//时长计算完成或不需要进行时长计算，更新告警时间
+//					jap.setALARM_TIME(at);
+//					ix += 1;
+//					return true;
+//				}else if(as.equals("0")){
+//					return false;
+//				}else{
+//					//AI算法重复告警，只增加告警图片，等告警恢复时统一入库
+//					if(jap.getALARM_IMG()!=null&&jap.getALARM_IMG()!=""){
+//						String IMG = jxap.getALARM_IMG();
+//						String StrIMG = jap.getALARM_IMG()+";"+IMG;
+//						jap.setALARM_IMG(StrIMG);
+//					}
+//					return false;
+//				}
+////				return true;
+//			}
+//		}
+		
+		public static void refreshPreSet(DevicePojo dp, AlarmPojo ap) {
+			AlarmPreSetPojo aps = dp.getAlarmPreSet().get(ap.getSignalId());
+			int ix = 0;
+			if (aps == null) {
+				aps = new AlarmPreSetPojo();
+				aps.setSignalId(ap.getSignalId());
+				aps.setAlarmStatus(ap.getAlarmStatus());
+				aps.setSwitchStatus(ap.getSwitchStatus());
+				aps.setAnalogValue(ap.getAnalogValue());
+				aps.setUploadTime(ap.getUploadTime());
+				aps.setTypeFlag(ap.getTypeFlag());
+				dp.getAlarmPreSet().put(ap.getSignalId(), aps);
+				// aps.setChangeFlag(true);
+				ix += 1;
+			} else {
+				// String signalId = ap.getSignalId();
+				int alarmStatus = ap.getAlarmStatus();
+				int switchStatus = ap.getSwitchStatus();
+				String analogValue = ap.getAnalogValue();
+				long uploadTime = ap.getUploadTime();
+				String typeFlag = ap.getTypeFlag();
+				if (!aps.getTypeFlag().equals("typeFlag")) {
+					aps.setTypeFlag(typeFlag);
+					ix += 1;
+				}
+				if (aps.getAlarmStatus() != alarmStatus) {
+					aps.setAlarmStatus(alarmStatus);
+					ix += 1;
+				}
+				if (aps.getSwitchStatus() != switchStatus) {
+					aps.setSwitchStatus(switchStatus);
+					ix += 1;
+				}
+				if (aps.getAnalogValue() != analogValue) {
+					aps.setAnalogValue(analogValue);
+					ix += 1;
+				}
+			}
+			if (ix > 0) {
+				// aps.setChangeFlag(true);
+				aps.setAp(ap);
+			}
+		}
+		//屏蔽告警筛选 屏蔽:false 不屏蔽:true
+		public static boolean signalIDCheck(String signalID){
+			List<String> sAlarm = ContainerUtil.getShieldAlarm();
+			if(sAlarm.contains(signalID)){
+				return false;
+			}else{
+				return true;
+			}
+		}
+		
+//		public static void JXrefreshState(JXDevicePojo jxdp){
+//			String state = jxdp.getState();
+//			String cacheState = "1";
+//			int alarmSum = 0;
+//			if (jxdp.getOfflineAlarmState().equalsIgnoreCase("0")) {
+//				Iterator<Map.Entry<String, JXAlarmPojo>> itr = jxdp.getRTAlarm().entrySet().iterator();
+//				//告警状态累加
+//				while(itr.hasNext()){
+//					JXAlarmPojo cache = itr.next().getValue();
+//					//排除离线告警
+////					int i = cache.getALARM_TYPE().length();
+//					if(cache.getALARM_TYPE().length()==1||!cache.getALARM_TYPE().substring(2, 8).equalsIgnoreCase("030000")){
+//						alarmSum += Integer.parseInt(cache.getALARM_STATUS());
+//					}
+//				}
+//				if (alarmSum > 0) {
+//					cacheState = "2";
+//				} else {
+//					cacheState = "1";
+//				}
+//				if (!state.equalsIgnoreCase(cacheState)) {
+//					jxdp.setState(cacheState);
+//					// 状态位flag更新
+//					jxdp.setAlarmPreSetFlag(1);
+//				}else if (jxdp.getOfflineAlarmState().equalsIgnoreCase("1")
+//						&& !jxdp.getState().equalsIgnoreCase("0")) {// 离线告警状态位为1，设备状态位不为0，更改设备状态位
+//					jxdp.setState("0");
+//					jxdp.setAlarmPreSetFlag(1);
+//				}
+//			}
+//		}
+		
+		public static void refreshState(DevicePojo dp) {
+			// TODO Auto-generated method stub
+			String state = dp.getState();
+			// System.out.println(dp + "   " + state);
+			String cacheState = "1";
+			int alarmSum = 0;
+			if (dp.getOfflineAlarmState().equalsIgnoreCase("0")) {
+				Iterator<Map.Entry<String, AlarmPreSetPojo>> itr = dp
+						.getAlarmPreSet().entrySet().iterator();
+				// 告警状态累加
+				while (itr.hasNext()) {
+					AlarmPreSetPojo cache = itr.next().getValue();
+					// AlarmPreSetPojo cache = entry.getValue();
+					//排除离线告警
+					if(!cache.getSignalId().substring(2, 8).equalsIgnoreCase("030000")){
+						alarmSum += cache.getAlarmStatus();
+					}
+				}
+				// 累加和大于0，设备处于告警状态，将设备状态为设为2
+				if (alarmSum > 0) {
+					cacheState = "2";
+				} else {
+					cacheState = "1";
+				}
+				if (!state.equalsIgnoreCase(cacheState)) {
+					dp.setState(cacheState);
+					// 状态位flag更新
+					dp.setAlarmPreSetFlag(1);
+				}
+			} else if (dp.getOfflineAlarmState().equalsIgnoreCase("1")
+					&& !dp.getState().equalsIgnoreCase("0")) {// 离线告警状态位为1，设备状态位不为0，更改设备状态位
+				dp.setState("0");
+				dp.setAlarmPreSetFlag(1);
+			}
+		}
+
+		public static HashMap<String, Channel> getUdpClientFuture() {
+			return udpClientFuture;
+		}
+
+		public static void setUdpClientFuture(HashMap<String, Channel> udpClientFuture) {
+			ContainerUtil.udpClientFuture = udpClientFuture;
+		}
+
+		public static int getConfigFlag() {
+			return configFlag;
+		}
+
+//		public static HashMap<String, String> getDeviceTransBuf() {
+//			return deviceTransBuf;
+//		}
+//		public static void setDeviceTransBuf(HashMap<String, String> deviceTransBuf) {
+//			ContainerUtil.deviceTransBuf = deviceTransBuf;
+//		}
+//		public static HashMap<String, String> getSingleTransBuf() {
+//			return singleTransBuf;
+//		}
+//		public static void setSingleTransBuf(HashMap<String, String> singleTransBuf) {
+//			ContainerUtil.singleTransBuf = singleTransBuf;
+//		}
+		public static void setConfigFlag(int configFlag) {
+			ContainerUtil.configFlag = configFlag;
+		}
+		
+		/**
+		 * 发送GPS坐标至百度接口，获取返回的百度坐标
+		 */
+		public static String changgeXY(String xx, String yy) {  
+	        try {  
+	            Socket s = new Socket("api.map.baidu.com", 80);  
+	            BufferedReader br = new BufferedReader(new InputStreamReader(  
+	                    s.getInputStream(), "UTF-8"));  
+	            OutputStream out = s.getOutputStream();
+	            StringBuffer sb = new StringBuffer(  
+	                    "GET /ag/coord/convert?from=0&to=4");  
+	            sb.append("&x=" + xx + "&y=" + yy);  
+	            sb.append("&callback=BMap.Convertor.cbk_3976 HTTP/1.1\r\n");  
+	            sb.append("User-Agent: Java/1.6.0_20\r\n");  
+	            sb.append("Host: api.map.baidu.com:80\r\n");  
+	            sb.append("Accept: text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2\r\n");  
+	            sb.append("Connection: Close\r\n");  
+	            sb.append("\r\n");  
+	            out.write(sb.toString().getBytes());  
+	            String json = "";  
+	            String tmp = "";  
+	            while ((tmp = br.readLine()) != null) {  
+	                // System.out.println(tmp);  
+	                json += tmp;  
+	            }  
+	            System.out.println(json);
+	            int start = json.indexOf("cbk_3976");  
+	            int end = json.lastIndexOf("}");  
+	            if (start != -1 && end != -1&& json.contains("\"x\":\"")) {  
+	                json = json.substring(start, end);  
+	                String[] point = json.split(",");  
+	                String x = point[1].split(":")[1].replace("\"", "");  
+	                String y = point[2].split(":")[1].replace("\"", "");  
+	                return (new String(decode(x)) + "," + new String(decode(y)));  
+	            } else {  
+	                System.out.println("gps坐标无效！！");  
+	            }  
+	            out.close();  
+	            br.close();  
+	  
+	        } catch (Exception e) {  
+	            e.printStackTrace();  
+	        }  
+	        return null;  
+	  
+	    }
+		public static byte[] decode(String str) {  
+			  
+	        byte[] bt = null;  
+	  
+	        try {  
+	            BASE64Decoder decoder = new BASE64Decoder();  
+	            bt = decoder.decodeBuffer(str);  
+	            // System.out.println(new String (bt));  
+	        } catch (IOException e) {  
+	            e.printStackTrace();  
+	        }  
+	  
+	        return bt;  
+	    }
+		
+	    /**
+	     * HEX字符串前补0，主要用于长度位数不足。
+	     * 
+	     * @param str
+	     *            String 需要补充长度的十六进制字符串
+	     * @param maxLength
+	     *            int 补充后十六进制字符串的长度
+	     * @return 补充结果
+	     */
+	    static public String patchHexString(String str, int maxLength) {
+	        String temp = "";
+	        for (int i = 0; i < maxLength - str.length(); i++) {
+	            temp = "0" + temp;
+	        }
+	        str = (temp + str).substring(0, maxLength);
+	        return str;
+	    }
+	    
+	    public void infoLog(String str){
+			LogPojo lp = new LogPojo();
+			lp.setLogType("INFO");
+			lp.setLogMessage(str);
+//			for(int i = 0; i < 5; i++){
+//				lp.getLogMessage().add("西巴日志-->" + i);
+//			}
+//			logInterface.runLog(lp);
+		}
+}

@@ -1,0 +1,17 @@
+package bd.nmam.collection.config.channelinitializer;
+
+import bd.nmam.collection.business.coder.jiangxi.JSONDecoder;
+import bd.nmam.collection.business.handler.jiangxi.ReciveCommandHandler;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.socket.SocketChannel;
+
+public class JXTCPBusinessInitializer extends ChannelInitializer<SocketChannel>{
+
+	@Override
+	protected void initChannel(SocketChannel ch) throws Exception {
+		// TODO Auto-generated method stub
+		ch.pipeline().addLast(new JSONDecoder())
+			.addLast(new ReciveCommandHandler());
+	}
+
+}

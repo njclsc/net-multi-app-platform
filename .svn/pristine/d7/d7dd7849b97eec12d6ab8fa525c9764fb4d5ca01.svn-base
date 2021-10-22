@@ -1,0 +1,115 @@
+package bd.nmam.collection.business.task.beidian;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.sql.DataSource;
+
+import bd.nmam.collection.business.pojo.beidian.DevicePojo;
+import bd.nmam.collection.business.pojo.beidian.GPSPojo;
+import bd.nmam.collection.util.beidian.ContainerUtil;
+import bd.nmam.collection.util.beidian.DatabaseUtil;
+
+public class BeidianGPSInfoOperateThread implements Runnable{
+	private long rate;
+	private DataSource ds;
+	private ReentrantLock reentrantLock;
+	private HashMap<String, DevicePojo> devices;
+	private String type;
+	
+	public BeidianGPSInfoOperateThread(long rate, String type) {
+		this.rate = rate;
+		this.ds = DatabaseUtil.getDataSource();
+		this.reentrantLock = ContainerUtil.getReentrantLock();
+		this.devices = ContainerUtil.getDevices();
+		this.type = type;
+	}
+
+	public void run() {
+		while (true) {
+			Connection con = null;
+			Statement stat = null;
+			try {
+				Iterator<Map.Entry<String, DevicePojo>> itr = null;
+				synchronized (reentrantLock) {
+					itr = devices.entrySet().iterator();
+
+					con = ds.getConnection();
+					while (itr.hasNext()) {
+						StringBuffer sql = new StringBuffer();
+						DevicePojo dp = itr.next().getValue();
+						String deviceId = dp.getDeviceId();
+						int GPSInfoFlag = dp.getGPSInfoFlag();
+						GPSPojo gp = dp.getGp();
+						if (GPSInfoFlag == 1) {
+							if (type.equalsIgnoreCase("2")) {
+								sql.append("update tb_aed_outdevice set ");
+								sql.append("lgt = '");
+								sql.append(gp.getBDlongitude());
+								sql.append("', ");
+								sql.append("lot = '");
+								sql.append(gp.getBDlatitude());
+								sql.append("', ");
+								sql.append("gpsLgt = '");
+								sql.append(gp.getLongitude());
+								sql.append("', ");
+								sql.append("gpsLot = '");
+								sql.append(gp.getLatitude());
+								sql.append("' where deviceId = '");
+								sql.append(deviceId);
+								sql.append("'");
+								dp.setGPSInfoFlag(0);
+							} else {
+								sql.append("update tb_device set ");
+								sql.append("lgt = '");
+								sql.append(gp.getBDlongitude());
+								sql.append("', ");
+								sql.append("lot = '");
+								sql.append(gp.getBDlatitude());
+								sql.append("', ");
+								sql.append("gpsLgt = '");
+								sql.append(gp.getLongitude());
+								sql.append("', ");
+								sql.append("gpsLot = '");
+								sql.append(gp.getLatitude());
+								sql.append("' where deviceId = '");
+								sql.append(deviceId);
+								sql.append("'");
+								dp.setGPSInfoFlag(0);
+							}
+							stat = con.createStatement();
+							stat.executeUpdate(sql.toString());
+							stat.close();
+
+							System.out.println("设备GPS信息保存完毕....");
+						}
+					}
+					con.close();
+				}
+				Thread.sleep(rate);
+			} catch (Exception e) {
+				e.printStackTrace();
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				ContainerUtil.getLoggerWrite().error(sw.toString());
+			} finally {
+				try {
+					if (stat != null) {
+						stat.close();
+					}
+					if (con != null) {
+						con.close();
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+}

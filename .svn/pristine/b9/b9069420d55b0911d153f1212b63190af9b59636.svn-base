@@ -1,0 +1,11 @@
+package bd.nmam.login.business.dao;
+
+import org.springframework.stereotype.Repository;
+
+import bd.nmam.login.business.pojo.UserPojo;
+
+@Repository
+public interface ILoginDao {
+
+	public UserPojo findUser(UserPojo user);
+}
